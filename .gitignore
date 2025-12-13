@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Non Wanting files
+*.log
+*.json
+
+# Virtual environments
+.venv
+
+# stuff
+*.env
+.env
