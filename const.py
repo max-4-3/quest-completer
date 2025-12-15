@@ -9,7 +9,7 @@ base64_encode = lambda buf: b64encode(buf).decode()
 def load_token():
     p = Path(".env")
     if p.exists() and (token := re.search(r"TOKEN=(.+)", p.read_text())):
-        return token.group()
+        return token.group(1)
     return ""
 
 TOKEN = load_token()

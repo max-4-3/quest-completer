@@ -13,9 +13,11 @@ from uuid import uuid4
 import aiohttp
 from pydotmap import DotMap
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import Progress
 
 from const import HEADERS, SUPER_PROPERTIES, base64_encode, dump_json
+from temp1 import make_state
 
 
 logging.basicConfig(filename="session.log", filemode="a", level=logging.DEBUG)
@@ -25,6 +27,11 @@ filehandler = logging.FileHandler("global.log", "a")
 formatter = logging.Formatter()
 filehandler.setFormatter(formatter)
 logger.addHandler(filehandler)
+
+
+def ui_log(msg: str):
+    logger.debug(msg)
+
 
 def normalize(obj):
     if isinstance(obj, Iterator):
@@ -51,20 +58,20 @@ async def complete_play_quest(
     session: aiohttp.ClientSession,
     procCallback: Callable[[int, int], None],
 ) -> bool:
-    application_id = quest.config.application.id
-    task_config = quest.task_config or quest.task_config_v2
+    application_id = quest.id
+    task_config = quest.config.task_config or quest.config.task_config_v2
     request_body = {"application_id": application_id, "terminal": False}
     seconds_needed = task_config.tasks.PLAY_ON_DESKTOP.target
 
-    application_info = DotMap(
-        (
-            await (
-                await session.get(
-                    f"applications/public?application_ids={application_id}"
-                )
-            ).json()
-        )[0]
-    )
+    # _ = DotMap(
+    #     (
+    #         await (
+    #             await session.get(
+    #                 f"applications/public?application_ids={application_id}"
+    #             )
+    #         ).json()
+    #     )[0]
+    # )
 
     def get_progress(data: DotMap) -> int:
         return (
@@ -81,7 +88,7 @@ async def complete_play_quest(
                 )
             ).json()
         )
-        logger.debug(f"Server Response for play quest: {server_response = }")
+        ui_log("Heartbeat sent!")
         progress = get_progress(server_response)
         procCallback(progress, seconds_needed)
 
@@ -129,7 +136,7 @@ async def complete_video_quest(
                     )
                 ).json()
             )
-            logger.debug(f"Server Response for video quest: {server_response = }")
+            ui_log(f"Heartbeat sent!")
             completed = server_response.completed_at != None
             seconds_done = min(seconds_needed, next_)
 
@@ -153,26 +160,27 @@ async def complete_quest(
     session: aiohttp.ClientSession,
     procCallback: Callable[[str, int, int], None],
 ) -> bool:
-    task_map = {
-        "WATCH_VIDEO": complete_video_quest,
-        "WATCH_VIDEO_ON_MOBILE": complete_video_quest,
-        "PLAY_ON_DESKTOP": complete_play_quest,
-    }
+    async with asyncio.Semaphore(1):
+        task_map = {
+            "WATCH_VIDEO": complete_video_quest,
+            "WATCH_VIDEO_ON_MOBILE": complete_video_quest,
+            "PLAY_ON_DESKTOP": complete_play_quest,
+        }
 
-    task_config = quest.config.task_config or quest.config.task_config_v2
-    quest_tasks = set(task_config.tasks.keys())
+        task_config = quest.config.task_config or quest.config.task_config_v2
+        quest_tasks = set(task_config.tasks.keys())
 
-    supported = quest_tasks & task_map.keys()
-    if not supported:
-        raise NotImplementedError(f"Unsupported tasks: {quest_tasks}")
+        supported = quest_tasks & task_map.keys()
+        if not supported:
+            raise NotImplementedError(f"Unsupported tasks: {quest_tasks}")
 
-    task_name = supported.pop()
+        task_name = supported.pop()
 
-    return await task_map[task_name](
-        quest,
-        session,
-        lambda done, total: procCallback(task_name, done, total),
-    )
+        return await task_map[task_name](
+            quest,
+            session,
+            lambda done, total: procCallback(task_name, done, total),
+        )
 
 
 async def change_heartbeat_id(session: aiohttp.ClientSession):
@@ -182,6 +190,7 @@ async def change_heartbeat_id(session: aiohttp.ClientSession):
         session.headers.update(
             {"X-Super-Properties": base64_encode(dump_json(SUPER_PROPERTIES))}
         )
+        ui_log("Changed heartbeat session id")
         await asyncio.sleep(30 * 60)
 
 
@@ -191,7 +200,9 @@ async def main():
     ) as session:
         with Console() as console:
             asyncio.create_task(change_heartbeat_id(session))
+
             raw_html = await (await session.get("/")).text()
+            save_path = Path("saved").expanduser()
             build_number_match = re.search(r""""BUILD_NUMBER":\s*"(\d+)""", raw_html)
             if build_number_match:
                 SUPER_PROPERTIES["client_build_number"] = int(
@@ -201,7 +212,9 @@ async def main():
 
             session.headers.update(HEADERS)
 
+            save_path.mkdir(parents=True, exist_ok=True)
             quests_response = DotMap(await (await session.get("quests/@me")).json())
+
             if quests_response.quest_enrollment_blocked_until:
                 raise RuntimeError("Blocked from doing quests")
 
@@ -218,35 +231,34 @@ async def main():
                     < datetime.now(timezone.utc)
                 )
 
-            def get_quest_name(quest) -> str:
-                return quest.config.messages.quest_name
+            with Progress() as progress:
 
-            active_quests = list(filter(valid_quest, quests_response.quests))
-            save_data(active_quests, "active_quests.json")
-            console.print("Trying to complete following quests:")
-            console.print(list(map(get_quest_name, active_quests)))
+                hiashaishas = [(quest, make_state(quest)) for quest in filter(valid_quest, quests_response.quests)]
+                hiashaishas.sort(key=lambda v: v[1].type, reverse=True)
 
-            with Progress(console=console) as progress:
-                for quest in active_quests:
-                    quest_complete_task_id = progress.add_task(
-                        "Initilizing...", start=False
+                async def wrapper(quest, task_id):
+                    def update(_, done, total):
+                        progress.start_task(task_id)
+                        progress.update(task_id, total=total, completed=done)
+                        if done >= total:
+                            progress.stop_task(task_id)
+
+                    return await complete_quest(quest, session, update)
+
+                for quest, state in hiashaishas:
+                    task_id = progress.add_task(
+                        f"[{state.type.name}] {state.name.title()[:30]}{len(state.name) > 30 and '...'}",
+                        total=state.total,
+                        completed=state.done,
+                        start=False,
                     )
-                    quest_completed = await complete_quest(
-                        quest,
-                        session,
-                        lambda task_name, done, total: progress.update(
-                            quest_complete_task_id,
-                            description=f"Completing {task_name.replace('_', ' ').title()}",
-                            total=total,
-                            completed=done,
-                        ),
-                    )
-                    if not quest_completed:
-                        console.log(f"Unable to complete quest: {quest.id}")
+                    try:
+                        await wrapper(quest, task_id)
+                    except:
+                        console.print_exception()
+                        progress.remove_task(task_id)
 
-                    progress.remove_task(quest_complete_task_id)
-                    await asyncio.sleep(5)  # sleep for 5 sec before retrying next
-
+                console.print("All tasks completed!", style="bold green")
 
 if __name__ == "__main__":
     asyncio.run(main())
