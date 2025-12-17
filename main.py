@@ -223,7 +223,7 @@ async def main():
                 layout["messages"].update(make_messages_panel(logs))
 
             def log(msg, update: bool = True):
-                logger.debug(msg)
+                logger.debug(Text.from_markup(msg).plain)
                 logs.append(msg)
                 if update:
                     update_messages()
@@ -302,9 +302,10 @@ async def main():
                 uncompleted_quests.sort(key=determine_quest_type, reverse=True)
 
                 # Only process specific reward quests
-                uncompleted_quests = list(filter(Filters.Worthy, uncompleted_quests))
+                worthy_uncompleted_quests = list(filter(Filters.Worthy, uncompleted_quests))
+                less_worthy_uncompleted_quuests = list(filter(lambda x: not Filters.Worthy(x), uncompleted_quests))
 
-                if not uncompleted_quests:
+                if not (worthy_uncompleted_quests or less_worthy_uncompleted_quuests):
                     log("You have nothing to do.")
                     log("Bye bye 👋🏻👋🏻")
                     return
@@ -318,7 +319,7 @@ async def main():
                         completed=done,
                     )
 
-                for idx, quest in enumerate(uncompleted_quests):
+                async def wrapper_quest_complete(idx, quest):
                     task_id = progress.add_task(
                         description="Initilizing...", total=None
                     )
@@ -356,6 +357,14 @@ async def main():
                         progress.stop_task(task_id)
 
                     update_progress()
+
+                log(Text.from_markup(f"Processing {len(worthy_uncompleted_quests)} worthy quests..."))
+                for idx, quest in enumerate(worthy_uncompleted_quests):
+                    await wrapper_quest_complete(idx, quest)
+
+                log(Text.from_markup(f"Processing {len(less_worthy_uncompleted_quuests)} less worthy quests..."))
+                for idx, quest in enumerate(less_worthy_uncompleted_quuests):
+                    await wrapper_quest_complete(idx, quest)
             except KeyboardInterrupt:
                 return
             except Exception:
