@@ -56,16 +56,23 @@ async def get_json(response: ClientResponse):
 def is_active(quest: DotMap) -> bool:
     return datetime.fromisoformat(quest.config.expires_at) > datetime.now(timezone.utc)
 
+
 def get_progress(quest: DotMap, extra_info: Optional[bool] = False):
     task_config = quest.config.task_config or quest.config.task_config_v2
     done, total = 0, 100
-    
+
     # Get when user_status is present
     if quest.user_status and len(quest.user_status.progress):
-        task_name, done = max(map(lambda x: (x.event_name, x.value), quest.user_status.progress.values()), key=lambda x: x[1])
+        task_name, done = max(
+            map(lambda x: (x.event_name, x.value), quest.user_status.progress.values()),
+            key=lambda x: x[1],
+        )
         total = task_config.tasks[task_name].target
     else:
-        task_name, total = min(map(lambda x: (x.event_name, x.target), task_config.tasks.values()), key=lambda x: x[1])
+        task_name, total = min(
+            map(lambda x: (x.event_name, x.target), task_config.tasks.values()),
+            key=lambda x: x[1],
+        )
         done = 0
 
     if extra_info:
@@ -73,12 +80,15 @@ def get_progress(quest: DotMap, extra_info: Optional[bool] = False):
     else:
         return done, total
 
+
 async def get_all_quests(session: ClientSession) -> Iterable[DotMap]:
     server_response = DotMap(
         await get_json(await session.get("quests/@me", raise_for_status=True))
     )
     if blocked := server_response.quest_enrollment_blocked_until:
-        raise RuntimeError(f"You are blocked for completing any quests until: {datetime.fromisoformat(blocked)}")
+        raise RuntimeError(
+            f"You are blocked for completing any quests until: {datetime.fromisoformat(blocked)}"
+        )
 
     excluded_quests = map(int, map(lambda x: x.id, server_response.excluded_quests))
     return filter(lambda x: x.id not in excluded_quests, server_response.quests)
@@ -124,14 +134,20 @@ def determine_quest_type(quest: DotMap) -> QuestType:
             return QuestType.Unknown
 
 
-async def enroll_quest(quest: DotMap, session: ClientSession) -> bool:
+async def enroll_quest(quest: DotMap, session: ClientSession) -> Optional[DotMap]:
     def can_enroll(quest: DotMap) -> bool:
         return not quest.user_status and is_active(quest)
 
-    return (
-        can_enroll(quest)
-        and (await session.post(f"quests/{quest.id}/enroll", raise_for_status=False)).ok
-    )
+    if not can_enroll(quest):
+        return
+    else:
+        return await get_json(
+            await session.post(
+                f"quests/{quest.id}/enroll",
+                json={"is_targeted": False, "location": 11, "metadata_raw": None},
+                raise_for_status=True,
+            )
+        )
 
 
 async def complete_video_quest(
@@ -141,7 +157,9 @@ async def complete_video_quest(
     log: Callable[[str], None],
 ):
     user_status = quest.user_status
-    task_name, seconds_done, seconds_needed = get_progress(quest, True) # pyright: ignore[reportAssignmentType]
+    task_name, seconds_done, seconds_needed = get_progress(   # pyright: ignore[reportAssignmentType]
+        quest, True
+    )
 
     max_future, speed, interval = 1e1, 7, 1
     enrolled_at = datetime.fromisoformat(user_status.enrolled_at).timestamp()
@@ -198,7 +216,9 @@ async def complete_play_quest(
 ) -> bool:
     application_id = quest.id  # 🙂
     request_body = {"application_id": application_id, "terminal": False}
-    seconds_done, seconds_needed = get_progress(quest) # pyright: ignore[reportAssignmentType]
+    seconds_done, seconds_needed = get_progress(  # pyright: ignore[reportAssignmentType]
+        quest
+    )
 
     log(
         f"[{quest.id}] Completing play quest started at '{datetime.fromisoformat(quest.user_status.enrolled_at)}' for rewards '{','.join(get_rewards(quest))}' [{seconds_done}/{seconds_needed} @ PLAY_ON_DESKTOP]"
@@ -232,7 +252,7 @@ async def complete_play_quest(
             sleep_time = random.uniform(30, 45)
         else:
             sleep_time = random.uniform(55, 70)
-            
+
         log(f"[{quest.id}] Sleeping for {sleep_time:.0f}s...")
         await asyncio.sleep(sleep_time)
 
@@ -262,10 +282,11 @@ async def complete_quest(
         procCallback(quest_name, 0, 0)
         return False
 
-    quest_name = get_quest_name(quest, quest_type)
+    quest_name = get_quest_name(quest, quest_type).title()
+    formatted_quest_name = f"[{quest_type.name}] {quest_name}"
     log(
         f"Quest of type '{quest_type.name}' is supported and now starting its completion. [{quest_name}]"
     )
     return await completer(
-        quest, session, lambda done, total: procCallback(quest_name, done, total), log
+        quest, session, lambda done, total: procCallback(formatted_quest_name, done, total), log
     )

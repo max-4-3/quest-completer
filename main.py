@@ -1,9 +1,13 @@
-import asyncio, json, logging, re
-from logging.handlers import RotatingFileHandler
+import asyncio
 from collections import deque
 from collections.abc import Iterable, Iterator
+from datetime import datetime
+import json
+import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from time import sleep
+import random
+import re
 from uuid import uuid4
 
 import aiohttp
@@ -35,17 +39,29 @@ from logic.quests import (
     get_rewards,
 )
 
+SPINNERS = [
+    "dots",
+    "line",
+    "arc",
+    "bounce",
+    "moon",
+    "earth",
+    "clock",
+    "hamburger",
+    "pong",
+    "shark",
+    "weather",
+]
 LOG_FORMAT = (
-    "%(asctime)s | "
-    "%(levelname)-8s | "
-    "%(name)s:%(lineno)d | "
-    "%(message)s"
+    "%(asctime)s | " "%(levelname)-8s | " "%(name)s:%(lineno)d | " "%(message)s"
 )
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+log_path = Path("./logs")
+log_path.mkdir(parents=True, exist_ok=True)
 handler = RotatingFileHandler(
-    "global.log",
+    log_path / "completer.log",
     maxBytes=10 * 1024 * 1024,  # 10MB
     backupCount=3,
     encoding="utf-8",
@@ -70,7 +86,7 @@ def normalize(obj):
     return obj
 
 
-def save_data(data, path):
+def save_data(data: dict | Iterable, path: Path) -> Path:
     path = Path(path).with_suffix(".json")
     tmp = path.with_suffix(".json.tmp")
 
@@ -78,6 +94,8 @@ def save_data(data, path):
         json.dump(normalize(data), f, indent=2, ensure_ascii=False)
 
     tmp.replace(path)
+
+    return path
 
 
 def make_renderable(quest: DotMap, **text_kwargs):
@@ -111,6 +129,58 @@ def make_quests_table(quests: Iterable[DotMap], **table_kwargs) -> Table:
     return table
 
 
+def make_messages_panel(messages: Iterable):
+    return Panel(
+        Group(*messages),
+        title="Messages",
+        title_align="center",
+        border_style="bold magenta",
+        expand=True,
+    )
+
+
+def make_progress_panel(progress: Progress):
+    return Panel(
+        Group(progress),
+        title="Progress",
+        title_align="left",
+        border_style="bold green",
+        expand=True,
+    )
+
+
+def get_progress_columns():
+    return (
+        SpinnerColumn(random.choice(SPINNERS), finished_text="😋"),
+        TextColumn(
+            "{task.description}",
+            style="italic cyan bold",
+        ),
+        BarColumn(None),
+        MofNCompleteColumn(),
+    )
+
+
+def make_progress(console: Console):
+    return Progress(
+        *get_progress_columns(),
+        console=console,
+        expand=True,
+    )
+
+
+def make_layout(progress: Progress):
+    layout = Layout()
+    layout.split_column(
+        Layout(name="messages", ratio=1), Layout(name="progress", size=3)
+    )
+
+    layout["messages"].update(make_messages_panel(["Initilizing..."]))
+    layout["progress"].update(make_progress_panel(progress))
+
+    return layout
+
+
 async def change_heartbeat_id(session: aiohttp.ClientSession):
     while True:
         new_heartbeat_id = str(uuid4())
@@ -138,151 +208,154 @@ async def main():
     ) as session:
         asyncio.create_task(change_heartbeat_id(session))
         await update_headers(session)
+        console = Console()
+        progress = make_progress(console)
+        layout = make_layout(progress)
 
-        with Console() as console:
+        with Live(layout, console=console) as live:
+            console = live.console
+            logs = deque(maxlen=max(5, (console.height or 24) - 6))
+
+            def update_progress():
+                layout["progress"].update(make_progress_panel(progress))
+
+            def update_messages():
+                layout["messages"].update(make_messages_panel(logs))
+
+            def log(msg, update: bool = True):
+                logger.debug(msg)
+                logs.append(msg)
+                if update:
+                    update_messages()
+
             try:
                 save_path = Path("saved").expanduser().absolute().resolve()
                 save_path.mkdir(parents=True, exist_ok=True)
+
+                # Determine current logged in user
+                current_user = DotMap(await (await session.get("users/@me")).json())
+                log(
+                    Text.from_markup(
+                        f"Logged in as: [bold cyan]{current_user.global_name or current_user.username}[/cyan bold] <{current_user.id}@{current_user.phone or current_user.email}>",
+                    )
+                )
 
                 # Gather all quests from server
                 quests = list(await get_all_quests(session))
                 enrollabe_quests = list(filter(Filters.Enrollable, quests))
                 unclaimed_quests = list(filter(Filters.Claimable, quests))
-                uncompleted_quests = list(
-                    sorted(
-                        filter(Filters.Completeable, quests),
-                        key=determine_quest_type,
-                        reverse=True,
-                    )
+                uncompleted_quests = list(filter(Filters.Completeable, quests))
+
+                saved_as = save_data(
+                    {
+                        "quests": quests,
+                        "enrollabe_quests": enrollabe_quests,
+                        "unclaimed_quests": unclaimed_quests,
+                        "uncompleted_quests": uncompleted_quests,
+                    },
+                    save_path
+                    / f"{datetime.now().strftime('%d-%m-%Y_%M,%H,%S')}-quest-info.json",
                 )
+                log("Saved quest info in: {}".format(saved_as.relative_to(Path(".").expanduser().resolve())))
 
                 if unclaimed_quests:
-                    console.print("You got some unclaimed quests.")
-                    console.print(
-                        make_quests_table(unclaimed_quests, title="UnClaimed Quests")
+                    log(
+                        Text(
+                            f"You have {len(unclaimed_quests)} unclaimed quests",
+                            style="bold yellow",
+                        )
                     )
 
                 if enrollabe_quests:
-                    console.print("You have some unenrolled quests.")
-                    console.print(
-                        make_quests_table(enrollabe_quests, title="UnEnrolled Quests")
+                    log(
+                        Text(
+                            f"You have {len(enrollabe_quests)} un-enrolled quests",
+                            style="bold green",
+                        )
                     )
-                    console.print("Enrolling...")
                     for quest in enrollabe_quests:
-                        await enroll_quest(quest, session)
-                        console.print("Enrolled in '{}'".format(get_quest_name(quest)))
-                        await asyncio.sleep(1)
-                    return
+                        user_status = await enroll_quest(quest, session)
+
+                        if not user_status:
+                            log(
+                                Text(
+                                    f"[{determine_quest_type(quest).name}] Unable to enroll in: {get_quest_name(quest)}",
+                                    style="italic red",
+                                )
+                            )
+                        else:
+                            log(
+                                Text(
+                                    f"[{determine_quest_type(quest).name}] Enrolled in: {get_quest_name(quest)}",
+                                    style="italic green",
+                                )
+                            )
+                            quest.user_status = user_status
+                            uncompleted_quests.append(quest)
+
+                    uncompleted_quests = list(
+                        filter(Filters.Completeable, uncompleted_quests)
+                    )
 
                 if not uncompleted_quests:
-                    console.print("You have nothing to do.")
-                    console.print("Bye bye 👋🏻👋🏻")
+                    log("You have nothing to do.")
+                    log("Bye bye 👋🏻👋🏻")
                     return
 
-                console.print("Completing following quests.")
-                console.print(
-                    make_quests_table(uncompleted_quests, title="Active Quests")
-                )
-
-                logs = deque(maxlen=console.height - 1)
+                # Sort
+                uncompleted_quests.sort(key=determine_quest_type, reverse=True)
 
                 def updater(name: str, done: int, total: int, task_id: TaskID):
-                    task = progress.tasks[task_id]
-
-                    if not task.started:
-                        progress.start_task(task_id)
-
+                    cap: int = (console.width or 24) // 3 - 10
                     progress.update(
                         task_id,
-                        description=name[:30] + ("..." if len(name) > 30 else ""),
+                        description=name[:cap] + ("..." if len(name) > cap else ""),
                         total=total,
+                        completed=done,
                     )
 
-                    delta = done - task.completed
-                    if delta > 0:
-                        progress.advance(task_id, delta)
-
-                progress = Progress(
-                    SpinnerColumn("arc", finished_text="😋"),
-                    TextColumn(
-                        "{task.description}",
-                        style="italic cyan bold",
-                        markup=False,
-                        highlighter=None,
-                    ),
-                    BarColumn(),
-                    MofNCompleteColumn(),
-                    console=console,
-                    expand=True,
-                )
-                layout = Layout()
-                layout.split_column(
-                    Layout(name="messages", ratio=1), Layout(name="progress", size=4)
-                )
-
-                def update_messages():
-                    layout["messages"].update(
-                        Panel(
-                            Group(*logs),
-                            title="Messages",
-                            title_align="center",
-                            style="magenta bold",
-                            border_style="yellow",
-                            expand=True,
-                        )
+                for idx, quest in enumerate(uncompleted_quests):
+                    task_id = progress.add_task(
+                        description="Initilizing...", total=None
                     )
+                    progress.columns = get_progress_columns()
 
-                def update_progress_layout():
-                    layout["progress"].update(
-                        Panel(
-                            Group(progress),
-                            title="Progress",
-                            title_align="left",
-                            style="bold green",
-                            border_style="bold cyan",
-                            expand=True,
-                        )
-                    )
-
-                with Live(layout, refresh_per_second=10, console=console):
-                    update_progress_layout()
-                    update_messages()
-
-                    for quest in uncompleted_quests:
-                        task_id = progress.add_task(
-                            description="Initilizing...", start=False
-                        )
-                        task = asyncio.create_task(
-                            complete_quest(
-                                quest,
-                                session,
-                                lambda name, done, total: updater(
-                                    name, done, total, task_id
+                    update_progress()
+                    task = asyncio.create_task(
+                        complete_quest(
+                            quest,
+                            session,
+                            procCallback=lambda name, done, total: updater(
+                                name, done, total, task_id
+                            ),
+                            log=lambda msg: log(
+                                Text(
+                                    msg,
+                                    style=f"{'Quest completed' in msg and 'green bold' or 'white italic'}",
+                                    justify="left",
+                                    overflow="ellipsis",
+                                    no_wrap=True,
                                 ),
-                                lambda msg: logger.debug(msg)
-                                or logs.append(
-                                    Text(
-                                        msg,
-                                        style="magenta italic",
-                                        justify="left",
-                                        overflow="ellipsis",
-                                        no_wrap=True,
-                                    )
-                                ),
-                            )
+                                False,
+                            ),
                         )
-                        while not task.done():
-                            update_messages()
-                            update_progress_layout()
-                            await asyncio.sleep(1)
+                    )
 
-                        quest.completed = task.result()
+                    while not task.done():
+                        update_messages()
+                        await asyncio.sleep(1)
+
+                    # Remove taks if not last
+                    if idx != len(uncompleted_quests) - 1:
                         progress.remove_task(task_id)
+                    else:
+                        progress.stop_task(task_id)
+
+                    update_progress()
             except KeyboardInterrupt:
                 return
             except Exception:
                 console.print_exception()
-                return
 
 
 if __name__ == "__main__":

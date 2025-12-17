@@ -15,5 +15,5 @@ temp*.*
 .venv
 
 # stuff
-*.env
-.env
+*.env*
+.env*
