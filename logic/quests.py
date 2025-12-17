@@ -224,7 +224,7 @@ async def complete_video_quest(
             f"quests/{quest.id}/heartbeat", json={"timestamp": seconds_needed}
         )
 
-    log(f"[{quest.id}] Quest completed!")
+    log(f"[{quest.id}] Quest completed at {datetime.now()}!")
     procCallback(seconds_needed, seconds_needed)
 
     return True
