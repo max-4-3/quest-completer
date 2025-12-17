@@ -298,13 +298,16 @@ async def main():
                         filter(Filters.Completeable, uncompleted_quests)
                     )
 
+                # Sort
+                uncompleted_quests.sort(key=determine_quest_type, reverse=True)
+
+                # Only process specific reward quests
+                uncompleted_quests = list(filter(Filters.Worthy, uncompleted_quests))
+
                 if not uncompleted_quests:
                     log("You have nothing to do.")
                     log("Bye bye 👋🏻👋🏻")
                     return
-
-                # Sort
-                uncompleted_quests.sort(key=determine_quest_type, reverse=True)
 
                 def updater(name: str, done: int, total: int, task_id: TaskID):
                     cap: int = (console.width or 24) // 3 - 10

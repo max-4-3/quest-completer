@@ -27,6 +27,13 @@ class Filters:
         < datetime.now(timezone.utc)
     )
 
+    Worthy: Callable[[DotMap], bool] = lambda x: bool(
+        is_active(x)
+        and any(
+            reward.type in [3, 4] for reward in x.config.rewards_config.rewards
+        )  # 3, 4 => Collectable, Orbs
+    )
+
 
 @total_ordering
 class QuestType(Enum):
@@ -157,9 +164,9 @@ async def complete_video_quest(
     log: Callable[[str], None],
 ):
     user_status = quest.user_status
-    task_name, seconds_done, seconds_needed = get_progress(   # pyright: ignore[reportAssignmentType]
+    task_name, seconds_done, seconds_needed = get_progress(
         quest, True
-    )
+    )  # pyright: ignore[reportAssignmentType]
 
     max_future, speed, interval = 1e1, 7, 1
     enrolled_at = datetime.fromisoformat(user_status.enrolled_at).timestamp()
@@ -201,20 +208,24 @@ async def complete_video_quest(
         start = asyncio.get_running_loop().time()
         end = start + interval
 
-        while True:
-            remaining = end - asyncio.get_running_loop().time()
-            if remaining <= 0:
-                break
+        if log_interval > interval:
+            await asyncio.sleep(interval)
+        else:
+            while True:
+                remaining = end - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    break
 
-            log(f"[{quest.id}] {remaining:.0f}s remaining...")
-            await asyncio.sleep(min(log_interval, remaining))
+                log(f"[{quest.id}] {remaining:.0f}s remaining...")
+                await asyncio.sleep(min(log_interval, remaining))
 
     if not completed:
         await session.post(
             f"quests/{quest.id}/heartbeat", json={"timestamp": seconds_needed}
         )
-        log(f"[{quest.id}] Quest completed!")
-        procCallback(seconds_needed, seconds_needed)
+
+    log(f"[{quest.id}] Quest completed!")
+    procCallback(seconds_needed, seconds_needed)
 
     return True
 
@@ -227,9 +238,9 @@ async def complete_play_quest(
 ) -> bool:
     application_id = quest.id  # 🙂
     request_body = {"application_id": application_id, "terminal": False}
-    seconds_done, seconds_needed = get_progress(  # pyright: ignore[reportAssignmentType]
+    seconds_done, seconds_needed = get_progress(
         quest
-    )
+    )  # pyright: ignore[reportAssignmentType]
 
     log(
         f"[{quest.id}] Completing play quest started at '{datetime.fromisoformat(quest.user_status.enrolled_at)}' for rewards '{','.join(get_rewards(quest))}' [{seconds_done}/{seconds_needed} @ PLAY_ON_DESKTOP]"
@@ -308,5 +319,8 @@ async def complete_quest(
         f"Quest of type '{quest_type.name}' is supported and now starting its completion. [{quest_name}]"
     )
     return await completer(
-        quest, session, lambda done, total: procCallback(formatted_quest_name, done, total), log
+        quest,
+        session,
+        lambda done, total: procCallback(formatted_quest_name, done, total),
+        log,
     )
