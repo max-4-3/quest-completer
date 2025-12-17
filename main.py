@@ -248,6 +248,7 @@ async def main():
 
                 saved_as = save_data(
                     {
+                        "user": current_user,
                         "quests": quests,
                         "enrollabe_quests": enrollabe_quests,
                         "unclaimed_quests": unclaimed_quests,
