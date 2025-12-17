@@ -222,8 +222,9 @@ async def main():
             def update_messages():
                 layout["messages"].update(make_messages_panel(logs))
 
-            def log(msg, update: bool = True):
-                logger.debug(Text.from_markup(msg).plain)
+            def log(msg: Text | str, update: bool = True):
+                plain_text = Text.from_markup(msg).plain if isinstance(msg, str) else msg.plain
+                logger.debug(plain_text)
                 logs.append(msg)
                 if update:
                     update_messages()
@@ -358,11 +359,11 @@ async def main():
 
                     update_progress()
 
-                log(Text.from_markup(f"Processing {len(worthy_uncompleted_quests)} worthy quests..."))
+                log(Text.from_markup(f"Processing {len(worthy_uncompleted_quests)} [bold cyan]worthy[/cyan bold] quests..."))
                 for idx, quest in enumerate(worthy_uncompleted_quests):
                     await wrapper_quest_complete(idx, quest)
 
-                log(Text.from_markup(f"Processing {len(less_worthy_uncompleted_quuests)} less worthy quests..."))
+                log(Text.from_markup(f"Processing {len(less_worthy_uncompleted_quuests)} [italic yellow]less worthy[/yellow italic] quests..."))
                 for idx, quest in enumerate(less_worthy_uncompleted_quuests):
                     await wrapper_quest_complete(idx, quest)
             except KeyboardInterrupt:
