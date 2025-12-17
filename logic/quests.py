@@ -196,7 +196,18 @@ async def complete_video_quest(
             break
 
         log(f"[{quest.id}] Sleeping for {interval:.0f}s...")
-        await asyncio.sleep(interval)
+
+        log_interval = 10
+        start = asyncio.get_running_loop().time()
+        end = start + interval
+
+        while True:
+            remaining = end - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+
+            log(f"[{quest.id}] {remaining:.0f}s remaining...")
+            await asyncio.sleep(min(log_interval, remaining))
 
     if not completed:
         await session.post(
@@ -249,12 +260,21 @@ async def complete_play_quest(
             return True
 
         if progress > seconds_needed * 0.8:  # Last 20%
-            sleep_time = random.uniform(30, 45)
+            interval = random.uniform(30, 45)
         else:
-            sleep_time = random.uniform(55, 70)
+            interval = random.uniform(55, 70)
 
-        log(f"[{quest.id}] Sleeping for {sleep_time:.0f}s...")
-        await asyncio.sleep(sleep_time)
+        log_interval = 10
+        start = asyncio.get_running_loop().time()
+        end = start + interval
+
+        while True:
+            remaining = end - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+
+            log(f"[{quest.id}] {remaining:.0f}s remaining...")
+            await asyncio.sleep(min(log_interval, remaining))
 
 
 async def complete_quest(
