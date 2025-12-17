@@ -214,7 +214,7 @@ async def main():
 
         with Live(layout, console=console) as live:
             console = live.console
-            logs = deque(maxlen=max(5, (console.height or 24) - 6))
+            logs = deque(maxlen=max(5, (console.height or 24) - 3))
 
             def update_progress():
                 layout["progress"].update(make_progress_panel(progress))
