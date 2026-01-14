@@ -221,11 +221,13 @@ async def main(ap: ArgumentParser):
         if show_table:
             quests = await get_all_quests(session)
             table = make_quests_table(
-                sorted(quests, key=lambda x: (Filters.NotExpired(x), -get_progress(x)[1])),
+                sorted(
+                    quests, key=lambda x: (Filters.NotExpired(x), -get_progress(x)[1])
+                ),
                 title=f"{me.global_name or me.username}'s Quests",
                 highlight=True,
                 box=box.ROUNDED,
-                show_lines=True
+                show_lines=True,
             )
 
             console.print(table)
@@ -242,17 +244,24 @@ async def main(ap: ArgumentParser):
             def update_messages():
                 pass
 
-            def log(msg: Text | str, update: bool = True, important: bool = True):
-                plain_text = (
-                    Text.from_markup(msg).plain if isinstance(msg, str) else msg.plain
-                )
-                logger.debug(plain_text)
+            def log(*msgs: Text | str, update: bool = True, important: bool = True):
+                to_console, to_log = [], []
+
+                for msg in msgs:
+                    if isinstance(msg, Text):
+                        to_log.append(msg.plain)
+                    else:
+                        to_log.append(msg)
+                        msg = Text.from_markup(msg)
+
+                    msg.truncate(progress.console.width, overflow="ellipsis")
+                    to_console.append(msg)
+
+                logger.debug(to_log)
                 if not (verbose or important):
                     return
 
-                text = Text(msg) if not isinstance(msg, Text) else msg
-                text.truncate(progress.console.width, overflow="ellipsis")
-                progress.console.print(text)
+                progress.console.print(*to_console, sep="\n")
 
                 if update:
                     pass
@@ -336,11 +345,16 @@ async def main(ap: ArgumentParser):
                         )
 
                     if unclaimed_quests:
+                        quest_names = map(
+                            lambda x: Text(f"[{x.config.id}] {get_quest_name(x)}"),
+                            unclaimed_quests,
+                        )
                         log(
                             Text(
-                                f"You have {len(unclaimed_quests)} unclaimed quests",
+                                f"You have {len(unclaimed_quests)} unclaimed quests:",
                                 style="bold yellow",
-                            )
+                            ),
+                            *quest_names,
                         )
 
                     if enrollabe_quests:

@@ -32,8 +32,9 @@ class Filters:
         x.user_status
         and not in_past(x.config.expires_at)
         and x.user_status.completed_at
-        and x.config.rewards_config.rewards_expire_at
-        and not in_past(x.config.rewards_config.rewards_expire_at)
+        and not x.user_status.claimed_at
+        and (rea := x.config.rewards_config.rewards_expire_at)
+        and not in_past(rea)
     )
 
     Worthy: QuestFilter = lambda x: bool(
