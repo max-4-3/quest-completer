@@ -7,28 +7,37 @@ from aiohttp import ClientSession, ClientResponse
 from datetime import datetime, timezone
 from pydotmap import DotMap
 
+type QuestFilter = Callable[[DotMap], bool]
+type QuestCompleter = Callable[
+    [DotMap, ClientSession, Callable[[int, int], None], Callable[[str], None]],
+    Awaitable[Optional[bool]],
+]
+
 
 class Filters:
-    Enrollable: Callable[[DotMap], bool] = lambda x: not x.user_status and is_active(x)
-    Completeable: Callable[[DotMap], bool] = lambda x: (
+    NotExpired: QuestFilter = lambda x: not in_past(x.config.expires_at)
+    Enrollable: QuestFilter = lambda x: not x.user_status and not in_past(
+        x.config.expires_at
+    )
+
+    Completeable: QuestFilter = lambda x: (
         x.id != 1248385850622869556
         and x.user_status
         and x.user_status.enrolled_at
         and not x.user_status.completed_at
-        and is_active(x)
+        and not in_past(x.config.expires_at)
     )
 
-    Claimable: Callable[[DotMap], bool] = lambda x: bool(
+    Claimable: QuestFilter = lambda x: bool(
         x.user_status
-        and is_active(x)
+        and not in_past(x.config.expires_at)
         and x.user_status.completed_at
         and x.config.rewards_config.rewards_expire_at
-        and datetime.fromisoformat(x.config.rewards_config.rewards_expire_at)
-        < datetime.now(timezone.utc)
+        and not in_past(x.config.rewards_config.rewards_expire_at)
     )
 
-    Worthy: Callable[[DotMap], bool] = lambda x: bool(
-        is_active(x)
+    Worthy: QuestFilter = lambda x: bool(
+        not in_past(x.config.expires_at)
         and any(
             reward.type in [3, 4] for reward in x.config.rewards_config.rewards
         )  # 3, 4 => Collectable, Orbs
@@ -50,21 +59,16 @@ class QuestType(Enum):
         return self.value < other.value
 
 
-type QuestCompleter = Callable[
-    [DotMap, ClientSession, Callable[[int, int], None], Callable[[str], None]],
-    Awaitable[Optional[bool]],
-]
-
-
 async def get_json(response: ClientResponse):
     return await response.json()
 
 
-def is_active(quest: DotMap) -> bool:
-    return datetime.fromisoformat(quest.config.expires_at) > datetime.now(timezone.utc)
+def in_past(utc_iso: str) -> bool:
+    return datetime.now(timezone.utc) > datetime.fromisoformat(utc_iso)
 
 
-def get_progress(quest: DotMap, extra_info: Optional[bool] = False):
+def get_progress(quest: DotMap, /):
+    """TaskName, Done, Total"""
     task_config = quest.config.task_config or quest.config.task_config_v2
     done, total = 0, 100
 
@@ -82,16 +86,14 @@ def get_progress(quest: DotMap, extra_info: Optional[bool] = False):
         )
         done = 0
 
-    if extra_info:
-        return task_name, done, total
-    else:
-        return done, total
+    return task_name, done, total
 
 
 async def get_all_quests(session: ClientSession) -> Iterable[DotMap]:
     server_response = DotMap(
         await get_json(await session.get("quests/@me", raise_for_status=True))
     )
+
     if blocked := server_response.quest_enrollment_blocked_until:
         raise RuntimeError(
             f"You are blocked for completing any quests until: {datetime.fromisoformat(blocked)}"
@@ -142,10 +144,8 @@ def determine_quest_type(quest: DotMap) -> QuestType:
 
 
 async def enroll_quest(quest: DotMap, session: ClientSession) -> Optional[DotMap]:
-    def can_enroll(quest: DotMap) -> bool:
-        return not quest.user_status and is_active(quest)
 
-    if not can_enroll(quest):
+    if not Filters.Enrollable(quest):
         return
     else:
         return await get_json(
@@ -164,9 +164,7 @@ async def complete_video_quest(
     log: Callable[[str], None],
 ):
     user_status = quest.user_status
-    task_name, seconds_done, seconds_needed = get_progress(
-        quest, True
-    )  # pyright: ignore[reportAssignmentType]
+    task_name, seconds_done, seconds_needed = get_progress(quest)
 
     max_future, speed, interval = 1e1, 7, 1
     enrolled_at = datetime.fromisoformat(user_status.enrolled_at).timestamp()
@@ -238,9 +236,7 @@ async def complete_play_quest(
 ) -> bool:
     application_id = quest.id  # 🙂
     request_body = {"application_id": application_id, "terminal": False}
-    seconds_done, seconds_needed = get_progress(
-        quest
-    )  # pyright: ignore[reportAssignmentType]
+    _, seconds_done, seconds_needed = get_progress(quest)
 
     log(
         f"[{quest.id}] Completing play quest started at '{datetime.fromisoformat(quest.user_status.enrolled_at)}' for rewards '{','.join(get_rewards(quest))}' [{seconds_done}/{seconds_needed} @ PLAY_ON_DESKTOP]"
