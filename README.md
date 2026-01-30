@@ -5,23 +5,29 @@ This is a quest completer for discord written in python.
 ---
 
 ## Dependencies
--   `aiohttp`
--   `rich`
--   `pydotmap`
+
+- `aiohttp`
+- `rich`
+- `pydotmap`
 
 ---
 
 ## Documentation
+
 Most (nearly all) of resources are taken from:
 [Discord Userdoccers](https://docs.discord.food/resources/quests)
 
 ---
 
 ## Setup
+
 Create a `.env` at project root (or where `main.py` is located) file with following format:
+
 ```ini
 TOKEN="YOUR_TOKEN"
 ```
+
+or run the script with `TOKEN="YOUR_TOKEN"` at the begining
 
 ---
 
@@ -47,20 +53,20 @@ python -m venv .venv
 
 #### Activate the virtual environment
 
-* **Windows**
-
-  * **cmd**
+- **Windows**
+  - **cmd**
 
     ```bat
     .venv\Scripts\activate
     ```
-  * **PowerShell**
+
+  - **PowerShell**
 
     ```ps
     .venv\Scripts\Activate.ps1
     ```
 
-* **Linux / macOS**
+- **Linux / macOS**
 
   ```bash
   source .venv/bin/activate
@@ -77,8 +83,3 @@ pip install aiohttp rich pydotmap
 ```bash
 python main.py
 ```
-
-# ./scripts/
-## What For?
-Write and place your custom scripts here, using the logics 
-Basically, this dir can be used for writing a script that automates the quest completion further.
