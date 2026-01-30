@@ -379,7 +379,7 @@ async def main(ap: ArgumentParser):
                             else:
                                 log(
                                     Text(
-                                        f"[{determine_quest_type(quest).name}] Enrolled in: {get_quest_name(quest)}",
+                                        f"[{determine_quest_type(quest).name}] Enrolled in: {get_quest_name(quest)} ({', '.join(get_rewards(quest))})",
                                         style="italic green",
                                     )
                                 )

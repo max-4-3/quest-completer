@@ -17,3 +17,5 @@ temp*.*
 # stuff
 *.env*
 .env*
+
+scripts/*

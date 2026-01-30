@@ -2,14 +2,19 @@ from base64 import b64encode
 from uuid import uuid4
 from json import dumps as stringify
 from pathlib import Path
+from os import getenv
 import re
 
 dump_json = lambda d: stringify(d).encode()
 base64_encode = lambda buf: b64encode(buf).decode()
 def load_token():
+    if (token_env := getenv("token", getenv("TOKEN"))):
+        return token_env
+
     p = Path(".env")
     if p.exists() and (token := re.search(r"TOKEN=(.+)", p.read_text())):
         return token.group(1)
+
     return ""
 
 TOKEN = load_token()

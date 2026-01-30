@@ -1,7 +1,7 @@
 [project]
-name = "app"
+name = "QuestCompleter"
 version = "0.1.0"
-description = "Add your description here"
+description = "A simple discord quest completer written in python"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

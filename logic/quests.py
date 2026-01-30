@@ -264,7 +264,7 @@ async def complete_play_quest(
 
         if progress >= seconds_needed:
             procCallback(seconds_needed, seconds_needed)
-            log(f"[{quest.id} Quest completed at '{datetime.now()}'")
+            log(f"[{quest.id}] Quest completed at '{datetime.now()}'")
             return True
 
         if progress > seconds_needed * 0.8:  # Last 20%
