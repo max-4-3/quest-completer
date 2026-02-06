@@ -18,4 +18,4 @@ temp*.*
 *.env*
 .env*
 
-scripts/*.sh
+scripts/**
