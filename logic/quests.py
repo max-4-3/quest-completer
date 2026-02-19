@@ -16,8 +16,8 @@ type QuestCompleter = Callable[
 
 class Filters:
     NotExpired: QuestFilter = lambda x: not in_past(x.config.expires_at)
-    Enrollable: QuestFilter = lambda x: not x.user_status and not in_past(
-        x.config.expires_at
+    Enrollable: QuestFilter = lambda x: (
+        not x.user_status and not in_past(x.config.expires_at)
     )
 
     Completeable: QuestFilter = lambda x: (

@@ -6,17 +6,12 @@ on: [push]
 jobs:
   format:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.9", "3.10"]
     steps:
       - uses: actions/checkout@v5
       
       # Setup python enviorment
-      - name: Setting up Python version ${{ matrix.python-version }}
+      - name: Setting up Python
         uses: actions/setup-python@v3
-        with:
-          python-version: ${{ matrix.python-version }}
 
       # Install dependencies
       - name: Install dependencies
@@ -28,4 +23,4 @@ jobs:
       # it only formats because that's the only thing i want
       - name: Formating...
         run: |
-          ruff format
+          ruff format --check

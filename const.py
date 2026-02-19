@@ -7,8 +7,10 @@ import re
 
 dump_json = lambda d: stringify(d).encode()
 base64_encode = lambda buf: b64encode(buf).decode()
+
+
 def load_token():
-    if (token_env := getenv("token", getenv("TOKEN"))):
+    if token_env := getenv("token", getenv("TOKEN")):
         return token_env
 
     p = Path(".env")
@@ -16,6 +18,7 @@ def load_token():
         return token.group(1)
 
     return ""
+
 
 TOKEN = load_token()
 CLIENT_LAUNCH_ID = str(uuid4())

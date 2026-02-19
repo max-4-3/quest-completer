@@ -51,9 +51,7 @@ SPINNERS = [
     "pong",
     "shark",
 ]
-LOG_FORMAT = (
-    "%(asctime)s | " "%(levelname)-8s | " "%(name)s:%(lineno)d | " "%(message)s"
-)
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(message)s"
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -206,7 +204,6 @@ async def main(ap: ArgumentParser):
     async with aiohttp.ClientSession(
         base_url="https://discord.com/api/v10/", raise_for_status=True
     ) as session:
-
         await update_headers(session)
 
         console = Console()
