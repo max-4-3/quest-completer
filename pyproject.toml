@@ -9,3 +9,12 @@ dependencies = [
     "pydotmap>=0.1.3",
     "rich>=14.2.0",
 ]
+
+[tool.ruff]
+indent-width = 4
+
+[tool.ruff.lint]
+# Multiple import in one line, use def instead of lambda
+ignore = [ "E401", "E731", "E501" ]
+# Allow unused variabled when underscore prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"

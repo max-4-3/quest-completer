@@ -1,23 +1,31 @@
-name: Pylint
+name: Format
+run-name: ${{ github.actor }} is formating...
 
 on: [push]
 
 jobs:
-  build:
+  format:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pylint
-    - name: Analysing the code with pylint
-      run: |
-        pylint $(git ls-files '*.py')
+      - uses: actions/checkout@v5
+      
+      # Setup python enviorment
+      - name: Setting up Python version ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      # Ruff-ing (formating)
+      # it only formats because that's the only thing i want
+      - name: Formating...
+        run: |
+          ruff format
