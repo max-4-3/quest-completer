@@ -117,10 +117,13 @@ def get_quest_name(quest: DotMap, quest_type: Optional[QuestType] = None) -> str
     application_name = quest.config.application.name
 
     if quest_type == QuestType.Watch:
-        return (
-            quest.config.video_metadata.messages.video_title
-            or f"Watch video by {application_name.title()}"
-        )
+        try:
+            return (
+                quest.config.video_metadata.messages.video_title
+                or f"Watch video by {application_name.title()}"
+            )
+        except AttributeError:
+            pass
 
     return quest.config.messages.quest_name
 
@@ -193,7 +196,7 @@ async def complete_video_quest(
                     )
                 ).json()
             )
-            completed = server_response.completed_at != None
+            completed = server_response.completed_at is not None
             seconds_done = min(seconds_needed, next_)
             log(f"[{quest.id}] Heartbeat sent got reply: {server_response}")
 
