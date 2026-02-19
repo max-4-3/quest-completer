@@ -1,182 +1,37 @@
-import asyncio
-from collections.abc import Iterable, Iterator
-from datetime import datetime
-import json
-import logging
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
-import random
-import re
 from argparse import ArgumentParser
+import asyncio
+from datetime import datetime
+from pathlib import Path
+import re
 from uuid import uuid4
 
 import aiohttp
 from pydotmap import DotMap
-from rich import box
-from rich.console import Console, Group
-from rich.layout import Layout
-from rich.panel import Panel
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TaskID,
-    TextColumn,
-)
-from rich.table import Table
-from rich.text import Text
+from rich.box import ROUNDED
 
-from const import HEADERS, SUPER_PROPERTIES, base64_encode, dump_json
-from logic.quests import (
+from consts import DATE_FORMAT, HEADERS, LOG_FORMAT, LOG_PATH, SUPER_PROPERTIES
+from helpers import base64_encode, dump_json, get_logger, save_data
+from logic import (
     Filters,
     complete_quest,
-    determine_quest_type,
     enroll_quest,
-    get_all_quests,
-    get_progress,
+    get_json,
     get_quest_name,
-    get_rewards,
+    get_quest_progress,
+    get_quest_rewards,
+    get_quest_type,
+    get_quests,
+)
+from ui import (
+    Console,
+    TaskID,
+    Text,
+    get_quest_progress_columns,
+    make_progress,
+    make_quests_table,
 )
 
-SPINNERS = [
-    "dots",
-    "line",
-    "arc",
-    "bounce",
-    "moon",
-    "earth",
-    "clock",
-    "hamburger",
-    "pong",
-    "shark",
-]
-LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(message)s"
-
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-log_path = Path("./logs")
-log_path.mkdir(parents=True, exist_ok=True)
-handler = RotatingFileHandler(
-    log_path / "completer.log",
-    maxBytes=10 * 1024 * 1024,  # 10MB
-    backupCount=3,
-    encoding="utf-8",
-)
-
-handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[handler],
-)
-logger = logging.getLogger(__name__)
-
-
-def normalize(obj):
-    if isinstance(obj, Iterator):
-        return list(obj)
-    if isinstance(obj, dict):
-        return {k: normalize(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [normalize(x) for x in obj]
-    return obj
-
-
-def save_data(data: dict | Iterable, path: Path) -> Path:
-    path = Path(path).with_suffix(".json")
-    tmp = path.with_suffix(".json.tmp")
-
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(normalize(data), f, indent=2, ensure_ascii=False)
-
-    tmp.replace(path)
-
-    return path
-
-
-def quest_renderable(quest: DotMap, **text_kwargs):
-    # Type, Name, Rewards, Progress
-    def percentage(x, y) -> str:
-        if not all(isinstance(i, (int, float)) for i in [x, y]):
-            return "0.00%"
-        return f"{(x / y if y else 0) * 100:.2f}%"
-
-    return map(
-        lambda x: Text(x, **text_kwargs),
-        map(
-            str,
-            [
-                determine_quest_type(quest).name,
-                get_quest_name(quest).title(),
-                ", ".join(map(lambda x: str(x).title(), get_rewards(quest))),
-                percentage(*get_progress(quest)[1:]),
-                not Filters.NotExpired(quest),
-            ],
-        ),
-    )
-
-
-def make_quests_table(quests: Iterable[DotMap], **table_kwargs) -> Table:
-    table = Table(**table_kwargs, expand=True)
-
-    list(map(table.add_column, ["#", "Type", "Name", "Rewards", "Progress", "Expired"]))
-    for idx, quest in enumerate(quests, 1):
-        table.add_row(*[str(idx), *quest_renderable(quest)])
-
-    return table
-
-
-def make_messages_panel(messages: Iterable):
-    return Panel(
-        Group(*messages),
-        title="Messages",
-        title_align="center",
-        border_style="bold magenta",
-        expand=True,
-    )
-
-
-def make_progress_panel(progress: Progress):
-    return Panel(
-        Group(progress),
-        title="Progress",
-        title_align="left",
-        border_style="bold green",
-        expand=True,
-    )
-
-
-def get_progress_columns():
-    return (
-        SpinnerColumn(random.choice(SPINNERS), finished_text="😋"),
-        TextColumn(
-            "{task.description}",
-            style="italic cyan bold",
-        ),
-        BarColumn(None),
-        MofNCompleteColumn(),
-    )
-
-
-def make_progress(console: Console):
-    return Progress(
-        *get_progress_columns(),
-        console=console,
-        expand=True,
-    )
-
-
-def make_layout(progress: Progress):
-    layout = Layout()
-    layout.split_column(
-        Layout(name="messages", ratio=1), Layout(name="progress", size=3)
-    )
-
-    layout["messages"].update(make_messages_panel(["Initilizing..."]))
-    layout["progress"].update(make_progress_panel(progress))
-
-    return layout
+logger = get_logger(__name__, LOG_PATH / "completer.log", LOG_FORMAT, DATE_FORMAT)
 
 
 async def change_heartbeat_id(session: aiohttp.ClientSession):
@@ -207,7 +62,7 @@ async def main(ap: ArgumentParser):
         await update_headers(session)
 
         console = Console()
-        me = DotMap(await (await session.get("users/@me")).json())
+        me = DotMap(await get_json(await session.get("users/@me")))
 
         # Argument parsing
         args = ap.parse_args()
@@ -216,14 +71,15 @@ async def main(ap: ArgumentParser):
         show_table = args.show_table
 
         if show_table:
-            quests = await get_all_quests(session)
+            quests = await get_quests(session)
             table = make_quests_table(
                 sorted(
-                    quests, key=lambda x: (Filters.NotExpired(x), -get_progress(x)[1])
+                    quests,
+                    key=lambda x: (Filters.NotExpired(x), -get_quest_progress(x)[1]),
                 ),
                 title=f"{me.global_name or me.username}'s Quests",
                 highlight=True,
-                box=box.ROUNDED,
+                box=ROUNDED,
                 show_lines=True,
             )
 
@@ -233,15 +89,46 @@ async def main(ap: ArgumentParser):
         asyncio.create_task(change_heartbeat_id(session))
 
         with make_progress(console=console) as progress:
-            # logs = deque(maxlen=max(5, (console.height or 24) - 3))
+            _tween_queue: asyncio.Queue[object | tuple[TaskID, str, int, int]] = (
+                asyncio.Queue()
+            )
+            _current_values: dict[TaskID, int] = {}
+            _sential = object()
+
+            async def progress_worker(progress, speed: float = 2e-1):
+                while (item := await _tween_queue.get()) and item is not _sential:
+                    if not isinstance(item, tuple):
+                        break
+
+                    task_id, name, done, total = item
+
+                    current = _current_values.get(task_id, 0)
+
+                    # Update static fields immediately
+                    progress.update(task_id, description=name, total=total)
+
+                    # Tween smoothly
+                    while current < done:
+                        step = max(1, (done - current) // 8)  # easing
+                        current += step
+                        if current > done:
+                            current = done
+
+                        _current_values[task_id] = current
+                        progress.update(task_id, completed=current)
+
+                        await asyncio.sleep(speed)
+
+                    _current_values[task_id] = done
+                    _tween_queue.task_done()
+
+                if item:
+                    _tween_queue.task_done()
 
             def update_progress():
                 progress.refresh()
 
-            def update_messages():
-                pass
-
-            def log(*msgs: Text | str, update: bool = True, important: bool = True):
+            def log(*msgs: Text | str, important: bool = True):
                 to_console, to_log = [], []
 
                 for msg in msgs:
@@ -260,17 +147,17 @@ async def main(ap: ArgumentParser):
 
                 progress.console.print(*to_console, sep="\n")
 
-                if update:
-                    pass
-
             try:
+                # Start the Queue Worker
+                asyncio.create_task(progress_worker(progress, 1e-1))
+
                 save_path = Path("saved").expanduser().absolute().resolve()
                 save_path.mkdir(parents=True, exist_ok=True)
 
-                # Determine current logged in user
+                # get_quest_type current logged in user
                 log(
                     Text.from_markup(
-                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/cyan bold] <{me.id}@{me.phone or me.email}>",
+                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/] <{me.id}@{me.phone or me.email}>",
                     )
                 )
 
@@ -278,32 +165,27 @@ async def main(ap: ArgumentParser):
                     task_id = progress.add_task(
                         description="Initilizing...", total=None
                     )
-                    progress.columns = get_progress_columns()
+                    # Resets the spinner of progress bar
+                    progress.columns = get_quest_progress_columns()
 
                     update_progress()
-                    task = asyncio.create_task(
-                        complete_quest(
-                            quest,
-                            session,
-                            procCallback=lambda name, done, total: updater(
-                                name, done, total, task_id
+                    await complete_quest(
+                        quest,
+                        session,
+                        procCallback=lambda name, done, total: updater(
+                            name, done, total, task_id
+                        ),
+                        log=lambda msg: log(
+                            Text(
+                                msg,
+                                style=f"{'Quest completed' in msg and 'green bold' or 'white italic'}",
+                                justify="left",
+                                overflow="ellipsis",
+                                no_wrap=True,
                             ),
-                            log=lambda msg: log(
-                                Text(
-                                    msg,
-                                    style=f"{'Quest completed' in msg and 'green bold' or 'white italic'}",
-                                    justify="left",
-                                    overflow="ellipsis",
-                                    no_wrap=True,
-                                ),
-                                important="Quest completed" in msg,
-                            ),
-                        )
+                            important="Quest completed" in msg,
+                        ),
                     )
-
-                    while not task.done():
-                        update_messages()
-                        await asyncio.sleep(1)
 
                     # Remove taks if not last
                     if idx != len(uncompleted_quests) - 1:
@@ -317,7 +199,7 @@ async def main(ap: ArgumentParser):
                 counter = 0
                 while counter < max_retry:
                     # Gather all quests from server
-                    quests = list(await get_all_quests(session))
+                    quests = list(await get_quests(session))
                     enrollabe_quests = list(filter(Filters.Enrollable, quests))
                     unclaimed_quests = list(filter(Filters.Claimable, quests))
                     uncompleted_quests = list(filter(Filters.Completeable, quests))
@@ -332,7 +214,7 @@ async def main(ap: ArgumentParser):
                                 "uncompleted_quests": uncompleted_quests,
                             },
                             save_path
-                            / f"{datetime.now().strftime('%d-%m-%Y_%M,%H,%S')}-quest-info.json",
+                            / f"{me.id}-{datetime.now().strftime('%d-%m-%Y_%M,%H,%S')}-quest-info.json",
                         )
                         log(
                             "Saved quest info in: {}".format(
@@ -343,22 +225,22 @@ async def main(ap: ArgumentParser):
 
                     if unclaimed_quests:
                         quest_names = map(
-                            lambda x: Text(f"[{x.config.id}] {get_quest_name(x)}"),
+                            lambda x: Text.from_markup(
+                                f"[bold yellow]+[/] [{x.id}] [bold yellow]{get_quest_name(x)}[/]: {list(get_quest_rewards(x))}"
+                            ),
                             unclaimed_quests,
                         )
                         log(
-                            Text(
-                                f"You have {len(unclaimed_quests)} unclaimed quests:",
-                                style="bold yellow",
+                            Text.from_markup(
+                                f"[bold yellow]{len(unclaimed_quests)} Unclaimed quests[/]:",
                             ),
                             *quest_names,
                         )
 
                     if enrollabe_quests:
                         log(
-                            Text(
-                                f"You have {len(enrollabe_quests)} un-enrolled quests",
-                                style="bold green",
+                            Text.from_markup(
+                                f"[bold green]{len(enrollabe_quests)} Un-enrolled quests[/]:",
                             )
                         )
                         all_enrolled = False
@@ -367,17 +249,22 @@ async def main(ap: ArgumentParser):
 
                             if not user_status:
                                 log(
-                                    Text(
-                                        f"[{determine_quest_type(quest).name}] Unable to enroll in: {get_quest_name(quest)}",
-                                        style="italic red",
+                                    Text.from_markup(
+                                        f"[bold red]-[/] [{get_quest_type(quest).name}] Unable to enroll in: "
+                                        f"[bold red]"
+                                        f"{get_quest_name(quest)}"
+                                        f"[/]"
                                     )
                                 )
                                 all_enrolled = False
                             else:
                                 log(
-                                    Text(
-                                        f"[{determine_quest_type(quest).name}] Enrolled in: {get_quest_name(quest)} ({', '.join(get_rewards(quest))})",
-                                        style="italic green",
+                                    Text.from_markup(
+                                        f"[bold green]+[/] [{get_quest_type(quest).name}] Enrolled in: "
+                                        f"[bold green]"
+                                        f"{get_quest_name(quest)} "
+                                        f"[/]"
+                                        f"{list(get_quest_rewards(quest))}"
                                     )
                                 )
                                 quest.user_status = user_status
@@ -390,7 +277,7 @@ async def main(ap: ArgumentParser):
                         # Restart
                         continue
 
-                    # Only process specific reward quests [orbs, decorations]
+                    # Only process specific reward quests [orbs, decorations](Filters.Worthy)
                     worthy_uncompleted_quests = list(
                         filter(Filters.Worthy, uncompleted_quests)
                     )
@@ -399,11 +286,9 @@ async def main(ap: ArgumentParser):
                     )
 
                     # Sort
-                    worthy_uncompleted_quests.sort(
-                        key=determine_quest_type, reverse=True
-                    )
+                    worthy_uncompleted_quests.sort(key=get_quest_type, reverse=True)
                     less_worthy_uncompleted_quuests.sort(
-                        key=determine_quest_type, reverse=True
+                        key=get_quest_type, reverse=True
                     )
 
                     if not (
@@ -415,16 +300,13 @@ async def main(ap: ArgumentParser):
 
                     def updater(name: str, done: int, total: int, task_id: TaskID):
                         cap: int = (console.width or 24) // 3 - 10
-                        progress.update(
-                            task_id,
-                            description=name[:cap] + ("..." if len(name) > cap else ""),
-                            total=total,
-                            completed=done,
-                        )
+                        description = name[:cap] + ("..." if len(name) > cap else "")
+                        _tween_queue.put_nowait((task_id, description, done, total))
 
                     log(
                         Text.from_markup(
-                            f"Processing {len(worthy_uncompleted_quests)} [bold cyan]worthy[/cyan bold] quests..."
+                            f"Processing {len(worthy_uncompleted_quests)} "
+                            "[bold cyan]worthy[/] quests..."
                         )
                     )
                     for idx, quest in enumerate(worthy_uncompleted_quests):
@@ -432,15 +314,19 @@ async def main(ap: ArgumentParser):
 
                     log(
                         Text.from_markup(
-                            f"Processing {len(less_worthy_uncompleted_quuests)} [italic yellow]less worthy[/yellow italic] quests..."
+                            f"Processing {len(less_worthy_uncompleted_quuests)} "
+                            "[italic yellow]less worthy[/] quests..."
                         )
                     )
                     for idx, quest in enumerate(less_worthy_uncompleted_quuests):
                         await wrapper_quest_complete(idx, quest)
 
-                    # Done
+                    # Stop the queue_worker and be done
+                    await _tween_queue.put(_sential)
+                    # Wait until all item/progress_updates are applied
+                    await _tween_queue.join()
                     break
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, asyncio.CancelledError):
                 return
             except Exception:
                 console.print_exception()

@@ -1,29 +1,10 @@
-from base64 import b64encode
-from uuid import uuid4
-from json import dumps as stringify
 from pathlib import Path
-from os import getenv
-import re
-
-dump_json = lambda d: stringify(d).encode()
-base64_encode = lambda buf: b64encode(buf).decode()
-
-
-def load_token():
-    if token_env := getenv("token", getenv("TOKEN")):
-        return token_env
-
-    p = Path(".env")
-    if p.exists() and (token := re.search(r"TOKEN=(.+)", p.read_text())):
-        return token.group(1)
-
-    return ""
-
+from helpers import gen_id, load_token, dump_json, base64_encode
 
 TOKEN = load_token()
-CLIENT_LAUNCH_ID = str(uuid4())
-LAUNCH_SIGNATURE = str(uuid4())
-CLIENT_HEARTBEAT_SESSION_ID = str(uuid4())
+CLIENT_LAUNCH_ID = gen_id()
+LAUNCH_SIGNATURE = gen_id()
+CLIENT_HEARTBEAT_SESSION_ID = gen_id()
 USERAGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) discord/0.0.78 Chrome/118.0.5993.159 Electron/26.2.1 Safari/537.36"
 SUPER_PROPERTIES = {
     "os": "Linux",
@@ -57,3 +38,9 @@ HEADERS = {
     "X-Discord-Locale": "all",
     "X-Super-Properties": base64_encode(dump_json(SUPER_PROPERTIES)),
 }
+
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(message)s"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+LOG_PATH = Path("./logs/")
+
+LOG_PATH.mkdir(exist_ok=True)
