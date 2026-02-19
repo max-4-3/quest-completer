@@ -6,9 +6,9 @@ This is a quest completer for discord written in python.
 
 ## Dependencies
 
-- `aiohttp`
-- `rich`
-- `pydotmap`
+- `aiohttp`  : for async network related logic (session, cookies)
+- `rich`     : for terminal effects (🌚)
+- `pydotmap` : for traversing api response (no `dict.get()` hell)
 
 ---
 
