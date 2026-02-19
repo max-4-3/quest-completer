@@ -33,7 +33,7 @@ or run the script with `TOKEN="YOUR_TOKEN"` at the begining
 
 ## Usage
 
-### Using **uv** (recommended)
+### Using **[uv](https://docs.astral.sh/uv/) ** (recommended)
 
 Run directly with:
 
