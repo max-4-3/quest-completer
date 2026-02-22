@@ -8,7 +8,6 @@ from logic import (
     get_quest_rewards,
     Filters,
 )
-
 from rich.console import Console, Group
 from rich.layout import Layout
 from rich.panel import Panel
@@ -18,6 +17,7 @@ from rich.progress import (
     Progress,
     SpinnerColumn,
     TextColumn,
+    TaskProgressColumn,
 )
 from rich.table import Table
 from rich.text import Text
@@ -89,6 +89,7 @@ def get_quest_progress_columns():
             style="italic cyan bold",
         ),
         BarColumn(None),
+        TaskProgressColumn(style="italic cyan bold"),
         MofNCompleteColumn(),
     )
 

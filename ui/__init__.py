@@ -6,6 +6,7 @@ from ui.helpers import (
     Console,
     get_quest_progress_columns,
     Text,
+    Progress,
 )
 from rich.box import ROUNDED
 from rich.progress import TaskID
@@ -14,6 +15,7 @@ from rich.progress import TaskID
 __all__ = (
     "SPINNERS",
     "FINISHED_TEXTS",
+    "Progress",
     "Console",
     "Text",
     "TaskID",

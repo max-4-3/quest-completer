@@ -7,7 +7,6 @@ from uuid import uuid4
 
 import aiohttp
 from pydotmap import DotMap
-from rich.box import ROUNDED
 
 from consts import DATE_FORMAT, HEADERS, LOG_FORMAT, LOG_PATH, SUPER_PROPERTIES
 from helpers import base64_encode, dump_json, get_logger, save_data
@@ -23,12 +22,14 @@ from logic import (
     get_quests,
 )
 from ui import (
+    Progress,
     Console,
     TaskID,
     Text,
     get_quest_progress_columns,
     make_progress,
     make_quests_table,
+    ROUNDED,
 )
 
 logger = get_logger(__name__, LOG_PATH / "completer.log", LOG_FORMAT, DATE_FORMAT)
@@ -95,12 +96,15 @@ async def main(ap: ArgumentParser):
             _current_values: dict[TaskID, int] = {}
             _sential = object()
 
-            async def progress_worker(progress, speed: float = 2e-1):
+            async def progress_worker(progress: Progress, speed: float = 2e-1):
                 while (item := await _tween_queue.get()) and item is not _sential:
                     if not isinstance(item, tuple):
                         break
 
                     task_id, name, done, total = item
+                    if task_id not in progress.task_ids:
+                        _tween_queue.task_done()
+                        continue
 
                     current = _current_values.get(task_id, 0)
 
