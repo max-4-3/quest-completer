@@ -161,7 +161,7 @@ async def main(ap: ArgumentParser):
                 # get_quest_type current logged in user
                 log(
                     Text.from_markup(
-                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/] <{me.id}@{me.phone or me.email}>",
+                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/] {verbose and '<{me.id}@{me.phone or me.email}>' or ''}",
                     )
                 )
 
