@@ -230,7 +230,7 @@ async def main(ap: ArgumentParser):
                     if unclaimed_quests:
                         quest_names = map(
                             lambda x: Text.from_markup(
-                                f"[bold yellow]+[/] [{x.id}] [bold yellow]{get_quest_name(x)}[/]: {list(get_quest_rewards(x))}"
+                                f"[bold yellow]*[/] [{x.id}] [bold yellow]{get_quest_name(x)}[/]: {list(get_quest_rewards(x))}"
                             ),
                             unclaimed_quests,
                         )
@@ -307,23 +307,31 @@ async def main(ap: ArgumentParser):
                         description = name[:cap] + ("..." if len(name) > cap else "")
                         _tween_queue.put_nowait((task_id, description, done, total))
 
-                    log(
-                        Text.from_markup(
-                            f"Processing {len(worthy_uncompleted_quests)} "
-                            "[bold cyan]worthy[/] quests..."
+                    if len(worthy_uncompleted_quests) > 0:
+                        log(
+                            Text.from_markup(
+                                f"Processing {len(worthy_uncompleted_quests)} "
+                                "[bold cyan]worthy[/] quests..."
+                            )
                         )
-                    )
-                    for idx, quest in enumerate(worthy_uncompleted_quests):
-                        await wrapper_quest_complete(idx, quest)
+                        for idx, quest in enumerate(worthy_uncompleted_quests):
+                            await wrapper_quest_complete(idx, quest)
 
-                    log(
-                        Text.from_markup(
-                            f"Processing {len(less_worthy_uncompleted_quuests)} "
-                            "[italic yellow]less worthy[/] quests..."
+                        # Wait until all item/progress_updates related to current quests are applied
+                        await _tween_queue.join()
+
+                    if len(less_worthy_uncompleted_quuests) > 0:
+                        log(
+                            Text.from_markup(
+                                f"Processing {len(less_worthy_uncompleted_quuests)} "
+                                "[italic yellow]less worthy[/] quests..."
+                            )
                         )
-                    )
-                    for idx, quest in enumerate(less_worthy_uncompleted_quuests):
-                        await wrapper_quest_complete(idx, quest)
+                        for idx, quest in enumerate(less_worthy_uncompleted_quuests):
+                            await wrapper_quest_complete(idx, quest)
+
+                        # Wait until all item/progress_updates related to current quests are applied
+                        await _tween_queue.join()
 
                     # Stop the queue_worker and be done
                     await _tween_queue.put(_sential)
