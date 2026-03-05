@@ -9,8 +9,13 @@ from pydotmap import DotMap
 from logic.utils import time_in_past
 
 type QuestFilter = Callable[[DotMap], bool]
+
+type Logger = Callable[[str], None]
+type ProgressCallback = Callable[[int, int], None]
+type PrefixProgressCallback = Callable[[str, int, int], None]
+
 type QuestCompleter = Callable[
-    [DotMap, ClientSession, Callable[[int, int], None], Callable[[str], None]],
+    [DotMap, ClientSession, ProgressCallback, Logger],
     Awaitable[Optional[bool]],
 ]
 

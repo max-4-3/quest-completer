@@ -1,5 +1,4 @@
 import asyncio
-from collections.abc import Callable
 from datetime import datetime
 import json
 import math
@@ -9,7 +8,7 @@ from typing import Optional
 from aiohttp import ClientSession
 from pydotmap import DotMap
 
-from logic.objects import Filters, QuestCompleter, QuestType
+from logic.objects import Filters, Logger, PrefixProgressCallback, ProgressCallback, QuestCompleter, QuestType
 from logic.utils import (
     time_curr,
     time_diff_now,
@@ -27,8 +26,8 @@ from logic.helpers import (
 async def complete_video_quest(
     quest: DotMap,
     session: ClientSession,
-    procCallback: Callable[[int, int], None],
-    log: Callable[[str], None],
+    procCallback: ProgressCallback,
+    log: Logger,
 ):
     user_status = quest.user_status
     task_name, seconds_done, seconds_needed = get_quest_progress(quest)
@@ -104,8 +103,8 @@ async def complete_video_quest(
 async def complete_play_quest(
     quest: DotMap,
     session: ClientSession,
-    procCallback: Callable[[int, int], None],
-    log: Callable[[str], None],
+    procCallback: ProgressCallback,
+    log: Logger,
 ) -> bool:
     user_status = quest.user_status
     task_name, seconds_done, seconds_needed = get_quest_progress(quest)
@@ -181,8 +180,8 @@ async def complete_play_quest(
 async def complete_quest(
     quest: DotMap,
     session: ClientSession,
-    procCallback: Callable[[str, int, int], None],
-    log: Callable[[str], None],
+    procCallback: PrefixProgressCallback,
+    log: Logger,
 ) -> Optional[bool]:
     quest_type = get_quest_type(quest)
     quest_name = get_quest_name(quest, quest_type).title()
