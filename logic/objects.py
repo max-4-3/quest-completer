@@ -52,6 +52,7 @@ class Filters:
 
 @total_ordering
 class QuestType(Enum):
+    # Unknown => questType ∈ { progress, }
     Unknown = -1
     Achievement = 0
     Stream = 1

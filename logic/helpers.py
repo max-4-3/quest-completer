@@ -28,7 +28,7 @@ def get_quest_name(quest: DotMap, quest_type: Optional[QuestType] = None) -> str
     return quest.config.messages.quest_name
 
 
-def get_quest_progress(quest: DotMap, /):
+def get_quest_progress(quest: DotMap, /) -> tuple[str, int, int]:
     """TaskName, Done, Total"""
     task_config = quest.config.task_config or quest.config.task_config_v2
     done, total = 0, 100

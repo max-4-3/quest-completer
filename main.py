@@ -182,12 +182,12 @@ async def main(ap: ArgumentParser):
                         log=lambda msg: log(
                             Text(
                                 msg,
-                                style=f"{'Quest completed' in msg and 'green bold' or 'white italic'}",
+                                style='Quest completed' in msg and 'green bold' or 'white italic',
                                 justify="left",
                                 overflow="ellipsis",
                                 no_wrap=True,
                             ),
-                            important="Quest completed" in msg,
+                            important=("Quest completed" in msg) or ("Unknown Quest" in msg),
                         ),
                     )
 
