@@ -20,6 +20,7 @@ from logic import (
     get_quest_rewards,
     get_quest_type,
     get_quests,
+    get_quest_rewards_expires,
 )
 from ui import (
     Progress,
@@ -223,14 +224,15 @@ async def main(ap: ArgumentParser):
                         log(
                             "Saved quest info in: {}".format(
                                 saved_as.relative_to(Path(".").expanduser().resolve())
-                            ),
-                            important=False,
+                            )
                         )
+                        break
 
                     if unclaimed_quests:
                         quest_names = map(
+                            # * [id] QuestName: [Reward1,Reward2,...] (until: <DATE>[@<TIME>])
                             lambda x: Text.from_markup(
-                                f"[bold yellow]*[/] [{x.id}] [bold yellow]{get_quest_name(x)}[/]: {list(get_quest_rewards(x))}"
+                                f"[bold yellow]*[/] [{x.id}] [bold yellow]{get_quest_name(x)}[/]: {list(get_quest_rewards(x))} (until: {get_quest_rewards_expires(x, False)})"
                             ),
                             unclaimed_quests,
                         )

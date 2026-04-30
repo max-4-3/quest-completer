@@ -5,11 +5,14 @@ from aiohttp import ClientResponse, ClientSession
 from pydotmap import DotMap
 
 from logic.objects import Filters, QuestType
+from logic.utils import time_format
 
 
 def get_quest_type(quest: DotMap) -> QuestType:
     return QuestType.from_quest(quest)
 
+def get_quest_rewards_expires(quest: DotMap, time: bool = False, sep: str = "@") -> str:
+    return time_format(quest.config.rewards_config.rewards_expire_at, time, sep)
 
 def get_quest_name(quest: DotMap, quest_type: Optional[QuestType] = None) -> str:
     quest_type = quest_type or get_quest_type(quest)

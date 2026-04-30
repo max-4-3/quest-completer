@@ -1,5 +1,12 @@
 from datetime import timedelta, timezone, datetime
+import locale
 
+def time_format(utc_iso: str, time: bool = False, sep: str = "@") -> str:
+    fmt = locale.nl_langinfo(locale.D_FMT)
+    if time:
+        fmt += f"{sep}{locale.nl_langinfo(locale.T_FMT)}"
+
+    return datetime.fromisoformat(utc_iso).strftime(fmt)
 
 def time_diff_now(utc_iso: str) -> timedelta:
     return time_diff(time_curr().isoformat(), utc_iso)
