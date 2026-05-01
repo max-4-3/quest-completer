@@ -8,7 +8,14 @@ from typing import Optional
 from aiohttp import ClientSession
 from pydotmap import DotMap
 
-from logic.objects import Filters, Logger, PrefixProgressCallback, ProgressCallback, QuestCompleter, QuestType
+from logic.objects import (
+    Filters,
+    Logger,
+    PrefixProgressCallback,
+    ProgressCallback,
+    QuestCompleter,
+    QuestType,
+)
 from logic.utils import (
     time_curr,
     time_diff_now,

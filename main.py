@@ -183,12 +183,15 @@ async def main(ap: ArgumentParser):
                         log=lambda msg: log(
                             Text(
                                 msg,
-                                style='Quest completed' in msg and 'green bold' or 'white italic',
+                                style="Quest completed" in msg
+                                and "green bold"
+                                or "white italic",
                                 justify="left",
                                 overflow="ellipsis",
                                 no_wrap=True,
                             ),
-                            important=("Quest completed" in msg) or ("Unknown Quest" in msg),
+                            important=("Quest completed" in msg)
+                            or ("Unknown Quest" in msg),
                         ),
                     )
 
@@ -226,7 +229,7 @@ async def main(ap: ArgumentParser):
                                 saved_as.relative_to(Path(".").expanduser().resolve())
                             )
                         )
-                        break
+                        return
 
                     if unclaimed_quests:
                         quest_names = map(
@@ -362,7 +365,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s",
         "--save-data",
-        help="Saves the data into a json file (user_info, quests)",
+        help="Saves the data into a json file (user_info, quests) and exit",
         action="store_true",
         default=False,
     )
