@@ -351,21 +351,20 @@ async def main(ap: ArgumentParser):
 
 if __name__ == "__main__":
     parser = ArgumentParser(
-        prog="Discord Quest Completer",
-        description="Completes discord quests",
-        add_help=False,
+        description="completes discord quests",
     )
+
     parser.add_argument(
         "-v",
         "--verbose",
-        help="Increase verbosity of quest completions progress",
+        help="increase verbosity of quest completions progress",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-s",
         "--save-data",
-        help="Saves the data into a json file (user_info, quests) and exit",
+        help="saves the data into a json file (user_info, quests) and exit",
         action="store_true",
         default=False,
     )
@@ -374,10 +373,7 @@ if __name__ == "__main__":
         "--show-table",
         action="store_true",
         default=False,
-        help="Shows the quests as a table for current user and exit",
-    )
-    parser.add_argument(
-        "-h", "--help", "-?", help="Shows the help message and exit", action="help"
+        help="shows the quests as a table for current user and exit",
     )
 
     asyncio.run(main(parser))
