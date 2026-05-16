@@ -10,6 +10,10 @@ def time_format(utc_iso: str, time: bool = False, sep: str = "@") -> str:
     return datetime.fromisoformat(utc_iso).strftime(fmt)
 
 
+def time_parse(utc_iso: str) -> datetime:
+    return datetime.fromisoformat(utc_iso or datetime.now().isoformat())
+
+
 def time_diff_now(utc_iso: str) -> timedelta:
     return time_diff(time_curr().isoformat(), utc_iso)
 

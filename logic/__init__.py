@@ -9,6 +9,7 @@ from logic.helpers import (
     get_quest_rewards_expires,
 )
 from logic.utils import (
+    time_parse,
     time_curr,
     time_diff,
     time_diff_now,
@@ -28,6 +29,7 @@ __all__ = (
     "get_quest_rewards",
     "get_quest_progress",
     "get_quest_rewards_expires",
+    "time_parse",
     "time_curr",
     "time_diff",
     "time_diff_now",

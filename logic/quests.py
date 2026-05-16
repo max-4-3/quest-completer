@@ -30,6 +30,18 @@ from logic.helpers import (
 )
 
 
+async def get_orbs_balance(session: ClientSession):
+    balance = None
+
+    async with session.get(
+        "users/@me/virtual-currency/balance", raise_for_status=False
+    ) as resp:
+        if resp.ok and "json" in resp.content_type:
+            balance = int((await resp.json()).get("balance", "-1"))
+
+    return balance or -1
+
+
 async def complete_video_quest(
     quest: DotMap,
     session: ClientSession,

@@ -21,7 +21,9 @@ from logic import (
     get_quest_type,
     get_quests,
     get_quest_rewards_expires,
+    time_parse,
 )
+from logic.quests import get_orbs_balance
 from ui import (
     Progress,
     Console,
@@ -162,7 +164,7 @@ async def main(ap: ArgumentParser):
                 # get_quest_type current logged in user
                 log(
                     Text.from_markup(
-                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/] {verbose and '<{me.id}@{me.phone or me.email}>' or ''}",
+                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/] {verbose and '<{me.id}@{me.phone or me.email}>' or ''} [orbs: [cyan]{await get_orbs_balance(session)}[/]]",
                     )
                 )
 
@@ -216,7 +218,13 @@ async def main(ap: ArgumentParser):
                         saved_as = save_data(
                             {
                                 "user": me,
-                                "quests": quests,
+                                "quests": sorted(
+                                    quests,
+                                    key=lambda quest: time_parse(
+                                        quest.config.get("starts_at")
+                                    ),
+                                    reverse=True,
+                                ),
                                 "enrollabe_quests": enrollabe_quests,
                                 "unclaimed_quests": unclaimed_quests,
                                 "uncompleted_quests": uncompleted_quests,
@@ -364,7 +372,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s",
         "--save-data",
-        help="saves the data into a json file (user_info, quests) and exit",
+        help="saves the data into a json file (user_info, quests (newer first)) and exit",
         action="store_true",
         default=False,
     )
