@@ -67,6 +67,8 @@ async def main(ap: ArgumentParser):
 
         console = Console()
         me = DotMap(await get_json(await session.get("users/@me")))
+        balance = await get_orbs_balance(session)
+        me["balance"] = balance
 
         # Argument parsing
         args = ap.parse_args()
@@ -161,10 +163,22 @@ async def main(ap: ArgumentParser):
                 save_path = Path("saved").expanduser().absolute().resolve()
                 save_path.mkdir(parents=True, exist_ok=True)
 
-                # get_quest_type current logged in user
+                # current logged in user
                 log(
                     Text.from_markup(
-                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/] {verbose and '<{me.id}@{me.phone or me.email}>' or ''} [orbs: [cyan]{await get_orbs_balance(session)}[/]]",
+                        " ".join(
+                            map(
+                                str,
+                                filter(
+                                    bool,
+                                    [
+                                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/]",
+                                        verbose and f"<{me.id}@{me.phone or me.email}>",
+                                        balance > 0 and f"[orbs: [cyan]{balance}[/]]",
+                                    ],
+                                ),
+                            )
+                        )
                     )
                 )
 
