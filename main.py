@@ -75,6 +75,7 @@ async def main(ap: ArgumentParser):
         verbose = args.verbose
         save = args.save_data
         show_table = args.show_table
+        check = args.check
 
         if show_table:
             quests = await get_quests(session)
@@ -268,6 +269,11 @@ async def main(ap: ArgumentParser):
                             *quest_names,
                         )
 
+                    if check:
+                        if enrollabe_quests:
+                            log(Text.from_markup(f"[bold green]{len(enrollabe_quests)} Un-enrolled quests..."))
+                        return
+
                     if enrollabe_quests:
                         log(
                             Text.from_markup(
@@ -396,6 +402,12 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="shows the quests as a table for current user and exit",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="do not complete any quest just check status and enroll"
     )
 
     asyncio.run(main(parser))
