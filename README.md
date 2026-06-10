@@ -24,7 +24,7 @@ Most (nearly all) of resources are taken from:
 Create a `.env` at project root (or where `main.py` is located) file with following format:
 
 ```ini
-TOKEN="YOUR_TOKEN"
+TOKEN=YOUR_TOKEN
 ```
 
 or run the script with `TOKEN="YOUR_TOKEN"` at the begining

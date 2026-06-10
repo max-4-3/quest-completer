@@ -380,6 +380,7 @@ async def main(ap: ArgumentParser):
 if __name__ == "__main__":
     parser = ArgumentParser(
         description="completes discord quests",
+        epilog="default behaviour is to start completing quests given an TOKEN (via env)"
     )
 
     parser.add_argument(
