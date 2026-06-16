@@ -110,7 +110,7 @@ async def complete_video_quest(
 
     if not completed:
         await session.post(
-            f"quests/{quest.id}/heartbeat", json={"timestamp": seconds_needed}
+            f"quests/{quest.id}/video-progress", json={"timestamp": seconds_needed}
         )
 
     log(f"[{quest.id}] Quest completed at {time_curr().isoformat()}!")

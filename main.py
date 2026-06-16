@@ -132,6 +132,10 @@ async def main(ap: ArgumentParser):
                     _current_values[task_id] = done
                     _tween_queue.task_done()
 
+                    # Remove taks if not last
+                    if done >= total:
+                        progress.remove_task(task_id)
+
                 if item:
                     _tween_queue.task_done()
 
@@ -211,12 +215,6 @@ async def main(ap: ArgumentParser):
                             or ("Unknown Quest" in msg),
                         ),
                     )
-
-                    # Remove taks if not last
-                    if idx != len(uncompleted_quests) - 1:
-                        progress.remove_task(task_id)
-                    else:
-                        progress.stop_task(task_id)
 
                     update_progress()
 
