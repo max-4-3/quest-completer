@@ -18,6 +18,7 @@ from logic.utils import (
 )
 from logic.objects import Filters, QuestCompleter, QuestType
 from logic.quests import complete_quest
+from logic.registry import Registrar
 
 __all__ = (
     "get_json",
@@ -38,4 +39,5 @@ __all__ = (
     "Filters",
     "QuestType",
     "QuestCompleter",
+    "Registrar"
 )

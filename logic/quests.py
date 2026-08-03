@@ -13,9 +13,9 @@ from logic.objects import (
     Logger,
     PrefixProgressCallback,
     ProgressCallback,
-    QuestCompleter,
     QuestType,
 )
+from logic.registry import Registrar
 from logic.utils import (
     time_curr,
     time_diff_now,
@@ -42,6 +42,7 @@ async def get_orbs_balance(session: ClientSession):
     return balance or -1
 
 
+@Registrar.register(QuestType.Watch)
 async def complete_video_quest(
     quest: DotMap,
     session: ClientSession,
@@ -119,6 +120,7 @@ async def complete_video_quest(
     return True
 
 
+@Registrar.register(QuestType.Play)
 async def complete_play_quest(
     quest: DotMap,
     session: ClientSession,
@@ -205,11 +207,10 @@ async def complete_quest(
     quest_type = get_quest_type(quest)
     quest_name = get_quest_name(quest, quest_type).title()
 
-    # TODO: Add more functions
-    quest_map: dict[QuestType, QuestCompleter] = {
-        QuestType.Watch: complete_video_quest,
-        QuestType.Play: complete_play_quest,
-    }
+    if not Registrar.available(quest_type):
+        log(f"Unsupported Quest '{quest.id}' of type '{quest_type.name}'")
+        procCallback(quest_name, 0, 0)
+        return False
 
     if not Filters.Completeable(quest):
         log(f"Uncompleteable Quest '{quest.id}' of type '{quest_type}'")
@@ -221,12 +222,7 @@ async def complete_quest(
         procCallback(quest_name, 0, 0)
         return False
 
-    completer = quest_map.get(quest_type)
-    if not completer:
-        log(f"Unsupported Quest '{quest.id}' of type '{quest_type.name}'")
-        procCallback(quest_name, 0, 0)
-        return False
-
+    completer = Registrar.retrive(quest_type)
     log(
         f"[{quest_name}] Quest '{quest.id}' of type '{quest_type.name}' is supported "
         f"by '{completer.__name__}' "
