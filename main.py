@@ -12,6 +12,7 @@ from consts import DATE_FORMAT, HEADERS, LOG_FORMAT, LOG_PATH, SUPER_PROPERTIES
 from helpers import base64_encode, dump_json, get_logger, save_data
 from logic import (
     Filters,
+    Registrar,
     complete_quest,
     enroll_quest,
     get_json,
@@ -325,6 +326,16 @@ async def main(ap: ArgumentParser):
                     less_worthy_uncompleted_quuests.sort(
                         key=get_quest_type, reverse=True
                     )
+
+                    # Filter out uncompleteable quests
+                    worthy_uncompleted_quests = list(filter(
+                        lambda q: Registrar.available(get_quest_type(q)),
+                        worthy_uncompleted_quests
+                    ))
+                    less_worthy_uncompleted_quuests = list(filter(
+                        lambda q: Registrar.available(get_quest_type(q)),
+                        less_worthy_uncompleted_quuests
+                    ))
 
                     if not (
                         worthy_uncompleted_quests or less_worthy_uncompleted_quuests
