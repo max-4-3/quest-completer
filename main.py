@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import re
 from uuid import uuid4
+from dataclasses import dataclass, field, fields
 
 import aiohttp
 from pydotmap import DotMap
@@ -35,8 +36,28 @@ from ui import (
     make_quests_table,
     ROUNDED,
 )
+from ui.helpers import make_text
 
 logger = get_logger(__name__, LOG_PATH / "completer.log", LOG_FORMAT, DATE_FORMAT)
+
+@dataclass(frozen=True)
+class Config:
+    verbose: bool = field(default=False, metadata={
+        "alias": ("-v", "--verbose"),
+        "doc": "increase verbosity of quest completions progress"
+    })
+    save_data: bool = field(default=False, metadata={
+        "alias": ("-s", "--save-data"),
+        "doc": "saves the data into a json file (user_info, quests (newer first)) and exit"
+    })
+    show_table: bool = field(default=False, metadata={
+        "alias": ("-t", "--show-table"),
+        "doc": "shows the quests as a table for current user and exit"
+    })
+    check: bool = field(default=False, metadata={
+        "alias": ("-c", "--check"),
+        "doc": "do not complete any quest just check status and enroll"
+    })
 
 
 async def change_heartbeat_id(session: aiohttp.ClientSession):
@@ -60,7 +81,7 @@ async def update_headers(session: aiohttp.ClientSession):
     session.headers.update(HEADERS)
 
 
-async def main(ap: ArgumentParser):
+async def main(config: Config):
     async with aiohttp.ClientSession(
         base_url="https://discord.com/api/v10/", raise_for_status=True
     ) as session:
@@ -72,11 +93,10 @@ async def main(ap: ArgumentParser):
         me["balance"] = balance
 
         # Argument parsing
-        args = ap.parse_args()
-        verbose = args.verbose
-        save = args.save_data
-        show_table = args.show_table
-        check = args.check
+        verbose = config.verbose
+        save = config.save_data
+        show_table = config.show_table
+        check = config.check
 
         if show_table:
             quests = await get_quests(session)
@@ -170,23 +190,11 @@ async def main(ap: ArgumentParser):
                 save_path.mkdir(parents=True, exist_ok=True)
 
                 # current logged in user
-                log(
-                    Text.from_markup(
-                        " ".join(
-                            map(
-                                str,
-                                filter(
-                                    bool,
-                                    [
-                                        f"Logged in as: [bold cyan]{me.global_name or me.username}[/]",
-                                        verbose and f"<{me.id}@{me.phone or me.email}>",
-                                        balance > 0 and f"[orbs: [cyan]{balance}[/]]",
-                                    ],
-                                ),
-                            )
-                        )
-                    )
-                )
+                log(make_text(
+                    f"Logged in as: [bold cyan]{me.global_name or me.username}[/]",
+                    verbose and f"<{me.id}@{me.phone or me.email}>",
+                    balance > 0 and f"[orbs: [cyan]{balance}[/]]",
+                ))
 
                 async def wrapper_quest_complete(idx, quest):
                     task_id = progress.add_task(
@@ -246,61 +254,61 @@ async def main(ap: ArgumentParser):
                             save_path
                             / f"{me.id}-{datetime.now().strftime('%d-%m-%Y_%M,%H,%S')}-quest-info.json",
                         )
-                        log(
-                            "Saved quest info in: {}".format(
-                                saved_as.relative_to(Path(".").expanduser().resolve())
-                            )
-                        )
+
+                        log(make_text(
+                            "Saved quest info in:",
+                            f"\"[bold cyan]./{saved_as.relative_to(Path(".").expanduser().resolve())}[/]\""
+                        ))
                         return
 
                     if unclaimed_quests:
                         quest_names = map(
                             # * [id] QuestName: [Reward1,Reward2,...] (until: <DATE>[@<TIME>])
-                            lambda x: Text.from_markup(
-                                f"[bold yellow]*[/] [{x.id}] [bold yellow]{get_quest_name(x)}[/]: {list(get_quest_rewards(x))} (until: {get_quest_rewards_expires(x, False)})"
+                            lambda x: make_text(
+                                "[bold yellow]*[/]",
+                                f"[{x.id}]",
+                                f"[bold yellow]{get_quest_name(x)}[/]:",
+                                list(get_quest_rewards(x)),
+                                f"(until: {get_quest_rewards_expires(x, False)})"
                             ),
                             unclaimed_quests,
                         )
                         log(
-                            Text.from_markup(
+                            make_text(
                                 f"[bold yellow]{len(unclaimed_quests)} Unclaimed quests[/]:",
-                            ),
-                            *quest_names,
+                                *quest_names,
+                            )
                         )
 
                     if check:
                         if enrollabe_quests:
-                            log(Text.from_markup(f"[bold green]{len(enrollabe_quests)} Un-enrolled quests..."))
+                            log(make_text(f"[bold green]{len(enrollabe_quests)} Un-enrolled quests..."))
                         return
 
                     if enrollabe_quests:
                         log(
-                            Text.from_markup(
+                            make_text(
                                 f"[bold green]{len(enrollabe_quests)} Un-enrolled quests[/]:",
                             )
                         )
                         all_enrolled = False
-                        for quest in enrollabe_quests:
+                        for quest in filter(lambda quest: Registrar.available(get_quest_type(quest)), enrollabe_quests):
                             user_status = await enroll_quest(quest, session)
 
                             if not user_status:
                                 log(
-                                    Text.from_markup(
-                                        f"[bold red]-[/] [{get_quest_type(quest).name}] Unable to enroll in: "
-                                        f"[bold red]"
-                                        f"{get_quest_name(quest)}"
-                                        f"[/]"
+                                    make_text(
+                                        f"[bold red]-[/] [{get_quest_type(quest).name}] Unable to enroll in:"
+                                        f"[bold red]{get_quest_name(quest)}",
                                     )
                                 )
                                 all_enrolled = False
                             else:
                                 log(
-                                    Text.from_markup(
-                                        f"[bold green]+[/] [{get_quest_type(quest).name}] Enrolled in: "
-                                        f"[bold green]"
-                                        f"{get_quest_name(quest)} "
-                                        f"[/]"
-                                        f"{list(get_quest_rewards(quest))}"
+                                    make_text(
+                                        f"[bold green]+[/] [{get_quest_type(quest).name}] Enrolled in:"
+                                        f"[bold green]{get_quest_name(quest)}[/]",
+                                        list(get_quest_rewards(quest))
                                     )
                                 )
                                 quest.user_status = user_status
@@ -351,9 +359,11 @@ async def main(ap: ArgumentParser):
 
                     if len(worthy_uncompleted_quests) > 0:
                         log(
-                            Text.from_markup(
-                                f"Processing {len(worthy_uncompleted_quests)} "
-                                "[bold cyan]worthy[/] quests..."
+                            make_text(
+                                f"Processing",
+                                len(worthy_uncompleted_quests),
+                                "[bold cyan]worthy[/]",
+                                "quests..."
                             )
                         )
                         for idx, quest in enumerate(worthy_uncompleted_quests):
@@ -364,9 +374,11 @@ async def main(ap: ArgumentParser):
 
                     if len(less_worthy_uncompleted_quuests) > 0:
                         log(
-                            Text.from_markup(
-                                f"Processing {len(less_worthy_uncompleted_quuests)} "
-                                "[italic yellow]less worthy[/] quests..."
+                            make_text(
+                                f"Processing",
+                                len(less_worthy_uncompleted_quuests),
+                                "[bold cyan]less worthy[/]",
+                                "quests..."
                             )
                         )
                         for idx, quest in enumerate(less_worthy_uncompleted_quuests):
@@ -387,37 +399,23 @@ async def main(ap: ArgumentParser):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(
-        description="completes discord quests",
-        epilog="default behaviour is to start completing quests given an TOKEN (via env)"
-    )
+    def parse_config(ap: ArgumentParser) -> Config:
+        return Config(**ap.parse_args().__dict__)
 
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        help="increase verbosity of quest completions progress",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
-        "-s",
-        "--save-data",
-        help="saves the data into a json file (user_info, quests (newer first)) and exit",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
-        "-t",
-        "--show-table",
-        action="store_true",
-        default=False,
-        help="shows the quests as a table for current user and exit",
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        default=False,
-        help="do not complete any quest just check status and enroll"
-    )
+    def create_parser() -> ArgumentParser:
+        parser = ArgumentParser(
+            description="completes discord quests",
+            epilog="default behaviour is to start completing quests given an TOKEN (via env)"
+        )
 
-    asyncio.run(main(parser))
+        for field in fields(Config):
+            parser.add_argument(
+                *tuple(field.metadata["alias"]),
+                help=field.metadata["doc"],
+                default=field.default,
+                action=field.type is bool and "store_true" or "store",
+            )
+
+        return parser
+
+    asyncio.run(main(parse_config(create_parser())))
