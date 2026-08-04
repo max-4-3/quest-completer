@@ -1,5 +1,6 @@
 from ui.consts import SPINNERS, FINISHED_TEXTS
 from ui.helpers import (
+    make_text,
     make_layout,
     make_quests_table,
     make_progress,
@@ -19,6 +20,7 @@ __all__ = (
     "Console",
     "Text",
     "TaskID",
+    "make_text",
     "make_layout",
     "make_quests_table",
     "ROUNDED",

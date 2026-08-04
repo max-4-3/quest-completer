@@ -24,6 +24,8 @@ from rich.text import Text
 
 from ui.consts import SPINNERS, FINISHED_TEXTS
 
+def make_text(*parts: object, sep: str = " ") -> Text:
+    return Text.from_markup(sep.join(map(str,filter(bool, parts))))
 
 def make_quests_table(quests: Iterable[DotMap], **table_kwargs) -> Table:
     table = Table(**table_kwargs, expand=True)
