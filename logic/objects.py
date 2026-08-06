@@ -81,9 +81,10 @@ class QuestType(Enum):
 
         try:
             # "WATCH_VIDEO" => ["WATCH", "VIDEO"] => "WATCH"
-            name = list(map(lambda x: x.split("_").pop(0), map(str, tasks_names))).pop(
-                0
-            )
+            name = next(map(
+                lambda x: x.split("_").pop(0),
+                map(str, tasks_names)
+            ))
         except IndexError:
             name = "Unknown"
 
