@@ -4,7 +4,9 @@ import json
 import math
 import random
 from typing import Optional
+from uuid import uuid4
 
+from yarl import URL
 from aiohttp import ClientSession
 from pydotmap import DotMap
 
@@ -40,6 +42,148 @@ async def get_orbs_balance(session: ClientSession):
             balance = int((await resp.json()).get("balance", "-1"))
 
     return balance or -1
+
+
+@Registrar.register(QuestType.Achievement)
+async def complete_achievement_quest(
+    quest: DotMap,
+    session: ClientSession,
+    procCallback: ProgressCallback,
+    log: Logger,
+):
+    quest_id, activity_id = quest.config.id, quest.config.application.id
+
+    task_name, done, needed = get_quest_progress(quest)
+    enrolled_at = quest.user_status.enrolled_at
+    completed = done < needed
+
+    perc = (done / needed) if needed else 0.0
+    log(
+        f"[{quest_id}] "
+        f"{task_name}: {done}/{needed} ({completed = })"
+        f"({perc * 100:.1f}%) | "
+        f"Started: {datetime.fromisoformat(enrolled_at)} | "
+        f"Rewards: {','.join(get_quest_rewards(quest))}"
+    )
+
+    resp = await get_json(await session.post(f"applications/{activity_id}/proxy-tickets", json={}))
+    log(f"[{quest_id}] proxy-tickets resp for '{activity_id}': {resp}")
+    _ticket = resp.get("ticket", None)
+    if _ticket is None:
+        raise ValueError(f"proxy-tickets request doesn't have ticket: {resp}")
+    log(f"[{quest_id}] proxy tickets for '{activity_id}': {_ticket}")
+
+    resp = await get_json(
+        await session.post(
+            f"oauth2/authorize",
+            json={
+                "authorize": True,
+                "integration_type": 1,
+            },
+            params={
+                "client_id": activity_id,
+                "response_type": "code",
+                "scope": "identify",
+                "state": "",
+            },
+        )
+    )
+    log(f"[{quest_id}] oauth2 code resp for '{activity_id}': {resp}")
+    _code: str | None = (URL(_loc).query.get("code", None)) if (_loc := resp.get("location", None)) else None
+    if _code is None:
+        raise ValueError(f"oauth2 code request doesn't have a valid location (with code param): {resp}")
+    log(f"[{quest_id}] oauth2 code for '{activity_id}': {_code}")
+
+    ticket, env_id, code = str(_ticket), str(uuid4()), str(_code)
+    log(
+        f"[{quest_id}] "
+        f"Variables: {ticket = }; {env_id = }; {code = }"
+    )
+
+    async with ClientSession(
+        base_url=f"https://{activity_id}.discordsays.com/.proxy/",
+        headers={
+            "X-Discord-Activity-Id": activity_id,
+            "X-Discord-Hostname": f"{activity_id}.discordsays.com",
+            "X-Discord-Quest-Id": quest_id,
+            "X-Universe-Id": env_id
+        },
+    ) as proxy:
+
+        # resp = await proxy.get("/", params={
+        #     "instance_id": "example-cl-instance",
+        #     "discord_proxy_ticket": ticket,
+        #     "frame_id": str(uuid4())
+        # })
+        # auth_token = resp.cookies.get("discord_proxy_token")
+
+        resp = await get_json(
+            await proxy.post(
+                f"acf/authorize",
+                json={"activityId": activity_id, "code": code},
+            )
+        )
+        log(f"[{quest_id}] auth token resp for '{activity_id}': {resp}")
+        _auth_token: str | None = resp.get("token", None)
+        if _auth_token is None:
+            raise ValueError(f"auth token request doesn't have a valid token: {resp}")
+        log(f"[{quest_id}] auth token for '{activity_id}': {_auth_token}")
+        proxy.headers.add("X-Auth-Token", _auth_token)
+
+        while not completed:
+            await proxy.post(
+                "api/presence/heartbeat",
+                raise_for_status=True,
+                json={"environmentId": env_id, "joinedLocation": True},
+            )
+
+            resp = await get_json(
+                await proxy.post(
+                    f"acf/quest/progress",
+                    json={"progress": done},
+                )
+            )
+            log(f"[{quest_id}] progress({done}/{needed}) resp for '{activity_id}': {resp}")
+            _status: str | None = resp.get("status", None)
+            if _status is None:
+                raise ValueError(f"progress({done}/{needed}) request doesn't have a valid status: {resp}")
+            log(f"[{quest_id}] progress status for '{activity_id}': {_status}")
+
+            if _status != "ok":
+                log(f"[{quest_id}] Not ok progress status for '{activity_id}' at {done}")
+                continue
+
+            done += 1
+            procCallback(done, needed)
+            completed = done >= needed
+
+            if done > needed * 0.8:  # Last 20%
+                interval = random.uniform(2, 3)
+            else:
+                interval = random.uniform(4, 6)
+
+            await asyncio.sleep(interval)
+
+        if done < needed:
+            resp = await get_json(
+                await proxy.post(
+                    f"acf/quest/progress",
+                    json={"progress": needed},
+                )
+            )
+            log(f"[{quest_id}] progress({done}/{needed}) resp for '{activity_id}': {resp}")
+            _status: str | None = resp.get("status", None)
+            if _status is None:
+                raise ValueError(f"progress({done}/{needed}) request doesn't have a valid status: {resp}")
+            log(f"[{quest_id}] progress status for '{activity_id}': {_status}")
+
+            if _status != "ok":
+                log(f"[{quest_id}] Not ok progress status for '{activity_id}' at {done}")
+            else:
+                completed = True
+
+    log(f"[{quest.id}] Quest completed but it might take some time to show up as completed!")
+    procCallback(needed, needed)
 
 
 @Registrar.register(QuestType.Watch)
