@@ -274,10 +274,8 @@ async def main(config: Config):
                             unclaimed_quests,
                         )
                         log(
-                            make_text(
-                                f"[bold yellow]{len(unclaimed_quests)} Unclaimed quests[/]:",
-                                *quest_names,
-                            )
+                            make_text(f"[bold yellow]{len(unclaimed_quests)} Unclaimed quests[/]:"),
+                            *quest_names,
                         )
 
                     if check:
