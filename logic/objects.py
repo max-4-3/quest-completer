@@ -53,12 +53,15 @@ class Filters:
 @total_ordering
 class QuestType(Enum):
     # Unknown => questType ∈ { progress, }
-    Unknown = -1
-    Achievement = 0
-    Stream = 1
-    Activiy = 2
-    Play = 3
-    Watch = 4
+    # order: time consuming (top) to less time consuming (bottom)
+    #fmt: off
+    Unknown =       -1
+    Stream =        0
+    Activiy =       1
+    Play =          2
+    Watch =         3
+    Achievement =   4
+    #fmt: on
 
     @classmethod
     def from_quest(cls, quest: DotMap):
