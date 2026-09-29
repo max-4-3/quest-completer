@@ -3,9 +3,18 @@ import locale
 
 
 def time_format(utc_iso: str, time: bool = False, sep: str = "@") -> str:
-    fmt = locale.nl_langinfo(locale.D_FMT)
-    if time:
-        fmt += f"{sep}{locale.nl_langinfo(locale.T_FMT)}"
+    fmt: str = "%Y-%m-%d"
+    time_fmt: str | None = None
+    try:
+        fmt = locale.nl_langinfo(locale.D_FMT)
+        if time:
+            time_fmt = locale.nl_langinfo(locale.T_FMT)
+    except (AttributeError, ValueError):
+        if time:
+            time_fmt = "%H:%M:%S"
+
+    if time_fmt:
+        fmt += f"{sep}{time_fmt}"
 
     return datetime.fromisoformat(utc_iso).strftime(fmt)
 
