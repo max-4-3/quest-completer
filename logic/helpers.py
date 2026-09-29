@@ -72,7 +72,7 @@ async def get_quests(session: ClientSession) -> Iterable[DotMap]:
         await get_json(await session.get("quests/@me", raise_for_status=True))
     )
 
-    if blocked := server_response.quest_enrollment_blocked_until:
+    if blocked := (server_response.quest_enrollment_blocked_until or server_response.quest_access_suspended_until):
         raise RuntimeError(
             f"You are blocked for completing any quests until: {datetime.fromisoformat(blocked)}"
         )
